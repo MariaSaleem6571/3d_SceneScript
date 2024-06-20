@@ -9,18 +9,14 @@ import torch
 import open3d as o3d
 import pandas as pd
 import numpy as np
-from itertools import product
 import os
 from code_snippets.readers import read_points_file
-from itertools import product
 import torchsparse
 from torch import nn
 import torchsparse.nn as spnn
 import torchsparse.nn.functional as F
 import torchsparse.utils as sp_utils
 from torchsparse import SparseTensor
-from torchsparse.utils.quantize import sparse_quantize
-
 
 
 # %% [markdown]
@@ -153,17 +149,11 @@ class SparseResNetEncoder(nn.Module):
         self.conv5 = spnn.Conv3d(128, 512, kernel_size=3, stride=2)
 
     def forward(self, x):
-        print(f"Input to conv1: {x.F.shape}, {x.C.shape}")
         x = self.conv1(x)
-        print(f"Output of conv1: {x.F.shape}, {x.C.shape}")
         x = self.conv2(x)
-        print(f"Output of conv2: {x.F.shape}, {x.C.shape}")
         x = self.conv3(x)
-        print(f"Output of conv3: {x.F.shape}, {x.C.shape}")
         x = self.conv4(x)
-        print(f"Output of conv4: {x.F.shape}, {x.C.shape}")
         x = self.conv5(x)
-        print(f"Output of conv5: {x.F.shape}, {x.C.shape}")
         return x
 
 
@@ -172,11 +162,7 @@ class SparseResNetEncoder(nn.Module):
 encoder = SparseResNetEncoder()
 
 # Forward pass
-try:
-    encoded_features = encoder(sparse_tensor)
-except RuntimeError as e:
-    print(f"RuntimeError during encoder forward pass: {e}")
-    encoded_features = None
+encoded_features = encoder(sparse_tensor)
 
 # Append coordinates to feature vectors for positional encoding
 # coordinates = sparse_tensor.C.float()
