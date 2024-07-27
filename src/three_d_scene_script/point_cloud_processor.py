@@ -156,7 +156,7 @@ class VisionTransformer(nn.Module):
         batch_size = x.shape[0]
         cls_tokens = self.context_embedding.expand(batch_size, -1, -1).cuda()
         x = torch.cat((cls_tokens, x), dim=1)
-        pos_encoding = torch.cat((torch.zeros(batch_size, 1, pos_encoding.size(-1), device='cuda'), pos_encoding), dim=1)
+        pos_encoding = torch.cat((torch.zeros(batch_size, 1, pos_encoding.size(-1), device='cuda'), pos_encoding), dim=1) # IDHER YE DEKHNA HAI KE KESE CLS TOKEN OR POS ENCODING ADD KAR RAHE HAIN
         x = x + pos_encoding
         x = self.dropout(x)
         x = self.encoder(x)

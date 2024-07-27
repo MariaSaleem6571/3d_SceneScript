@@ -1,5 +1,4 @@
 import torchsparse
-
 from three_d_scene_script.point_cloud_processor import PointCloudTransformerLayer
 import torch
 import torch.nn as nn
