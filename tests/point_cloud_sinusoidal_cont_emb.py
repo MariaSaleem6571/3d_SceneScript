@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 from torch import nn
+import torchsparse
 import torchsparse.nn as spnn
 from torchsparse import SparseTensor
 
@@ -23,6 +24,14 @@ class PointCloudTransformerLayer(nn.Module):
             emb_dropout=vit_emb_dropout
         )
 
+    @classmethod
+    def read_points_file(cls, filepath):
+        assert os.path.exists(filepath), f"Could not find point cloud file: {filepath}"
+        df = pd.read_csv(filepath, compression="gzip")
+        point_cloud = df[["px_world", "py_world", "pz_world"]]
+        dist_std = df["dist_std"]
+        return point_cloud.to_numpy(), dist_std.to_numpy()
+
     def generate_sinusoidal_positional_encoding(self, coordinates, d_model):
         n_positions, n_dims = coordinates.shape
         pe = torch.zeros(n_positions, d_model, device='cuda')
@@ -36,13 +45,12 @@ class PointCloudTransformerLayer(nn.Module):
         return pe
 
     def process_point_cloud(self, points, dist_std):
-        points_np = points.cpu().numpy()  # Convert to NumPy array
         pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points_np)
+        pcd.points = o3d.utility.Vector3dVector(points)
         voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, self.voxel_size)
 
         voxel_map = {}
-        for i, point in enumerate(points_np):
+        for i, point in enumerate(points):
             voxel_index = tuple(voxel_grid.get_voxel(point))
             if voxel_index in voxel_map:
                 voxel_map[voxel_index].append(i)
@@ -52,7 +60,7 @@ class PointCloudTransformerLayer(nn.Module):
         aggregated_features = []
         filtered_voxel_indices = []
         for idx, (voxel_index, point_indices) in enumerate(voxel_map.items()):
-            aggregated_feature = np.mean(dist_std[point_indices].cpu().numpy())
+            aggregated_feature = np.mean(dist_std[point_indices])
             aggregated_features.append(aggregated_feature)
             filtered_voxel_indices.append(voxel_index)
 
@@ -66,41 +74,16 @@ class PointCloudTransformerLayer(nn.Module):
         return sparse_tensor
 
     def forward(self, sparse_tensor):
-        # assert isinstance(point_cloud_df, pd.DataFrame), "Input must be a pandas DataFrame"
-        # points = point_cloud_df[["px_world", "py_world", "pz_world"]].to_numpy()
-        # dist_std = point_cloud_df["dist_std"].to_numpy()
-        
-        # points = torch.tensor(points, dtype=torch.float32, device='cuda')
-        # dist_std = torch.tensor(dist_std, dtype=torch.float32, device='cuda')
-        
-        # print("Received point cloud:", points.shape, dist_std.shape)  
-
-        # sparse_tensor = self.process_point_cloud(points, dist_std)
-
         encoded_features = self.sparse_encoder(sparse_tensor)
-        # print("Encoded features:", encoded_features.F.shape, "Encoded coordinates:", encoded_features.C.shape) 
-
-        positional_encoding = self.generate_sinusoidal_positional_encoding(encoded_features.F, self.vit_dim)
-        # print("Positional encoding:", positional_encoding.shape) 
-
+        
+        positional_encoding = self.generate_sinusoidal_positional_encoding(encoded_features.C, self.vit_dim)
+        
         encoded_features_with_pos = encoded_features.F + positional_encoding
-        # print("Encoded features with positional encoding:", encoded_features_with_pos.shape) 
-
+        
         encoded_features_with_pos = encoded_features_with_pos.unsqueeze(0)
-        vit_encoded_features = self.vit(encoded_features_with_pos, positional_encoding.unsqueeze(0))
-        print("Final encoded features:", vit_encoded_features.shape)  # Print shape of ViT encoded features
-
-        vit_encoded_features = vit_encoded_features
-        return vit_encoded_features
-
-
-def read_points_file(filepath):
-    assert os.path.exists(filepath), f"Could not find point cloud file: {filepath}"
-    df = pd.read_csv(filepath, compression="gzip")
-    point_cloud = df[["px_world", "py_world", "pz_world"]]
-    dist_std = df["dist_std"]
-    return point_cloud.to_numpy(), dist_std.to_numpy()
-
+        vit_encoded_features, context_embedding = self.vit(encoded_features_with_pos, positional_encoding.unsqueeze(0))
+        
+        return vit_encoded_features, context_embedding
 
 class SparseResNetEncoder(nn.Module):
     def __init__(self):
@@ -166,9 +149,15 @@ class VisionTransformer(nn.Module):
         x = x + pos_encoding
         x = self.dropout(x)
         x = self.encoder(x)
-        return x
-
+        context_embedding = x[:, 0, :]  # Extracting the context embedding (the [CLS] token)
+        vit_encoded_features = x[:, 1:, :]  # Extracting the ViT encoded features
+        return vit_encoded_features, context_embedding
 
 if __name__ == '__main__':
     model = PointCloudTransformerLayer().cuda()
-
+    pt_cloud_path = "/home/mseleem/Desktop/3d_model_pt/0/semidense_points.csv.gz"
+    points, dist_std = model.read_points_file(pt_cloud_path)
+    sparse_tensor = model.process_point_cloud(points, dist_std)
+    pt_cloud_encoded_features, context_embedding = model(sparse_tensor)
+    print("ViT Encoded Features:", pt_cloud_encoded_features.shape)
+    print("Context Embedding:", context_embedding.shape)
