@@ -83,9 +83,9 @@ class CrossAttention(nn.Module):
     def __init__(self, d_model, d_out_kq, d_out_v):
         super(CrossAttention, self).__init__()
         self.d_out_kq = d_out_kq
-        self.W_query = nn.Parameter(torch.rand(d_model, d_out_kq))
-        self.W_key = nn.Parameter(torch.rand(d_model, d_out_kq))
-        self.W_value = nn.Parameter(torch.rand(d_model, d_out_v))
+        self.W_query = nn.Linear(torch.rand(d_model, d_out_kq))
+        self.W_key = nn.Linear(torch.rand(d_model, d_out_kq))
+        self.W_value = nn.Linear(torch.rand(d_model, d_out_v))
     
     def forward(self, x_1, x_2):
         queries_1 = x_1.matmul(self.W_query)
