@@ -41,7 +41,7 @@ class TransformerOutputLayer(nn.Module):
         command_logits = self.command_layer(x)  # Shape: (batch_size, sequence_length, 5)
 
         #Mask the "START" command logits to be very negative
-        command_logits[..., 0] = -float('inf')  # Assuming "START" is at index 0
+        command_logits[..., 0] = -float('inf') 
 
         command_probs = F.softmax(command_logits, dim=-1)  # Shape: (batch_size, sequence_length, 5)
         parameter_logits = self.param_layer(x)  # Shape: (batch_size, sequence_length, 6)
