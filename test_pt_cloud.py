@@ -39,6 +39,10 @@ class TransformerOutputLayer(nn.Module):
 
     def forward(self, x):
         command_logits = self.command_layer(x)  # Shape: (batch_size, sequence_length, 5)
+
+        #Mask the "START" command logits to be very negative
+        command_logits[..., 0] = -float('inf')  # Assuming "START" is at index 0
+
         command_probs = F.softmax(command_logits, dim=-1)  # Shape: (batch_size, sequence_length, 5)
         parameter_logits = self.param_layer(x)  # Shape: (batch_size, sequence_length, 6)
         parameters_probs = torch.tanh(parameter_logits)  # Shape: (batch_size, sequence_length, 6) # Using tanh per socho ke kese wapis lao gi raw logits ko
