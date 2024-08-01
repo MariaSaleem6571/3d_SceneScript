@@ -83,14 +83,14 @@ class CrossAttention(nn.Module):
     def __init__(self, d_model, d_out_kq, d_out_v):
         super(CrossAttention, self).__init__()
         self.d_out_kq = d_out_kq
-        self.W_query = nn.Linear(torch.rand(d_model, d_out_kq))
-        self.W_key = nn.Linear(torch.rand(d_model, d_out_kq))
-        self.W_value = nn.Linear(torch.rand(d_model, d_out_v))
+        self.W_query = nn.Linear(d_model, d_out_kq)
+        self.W_key = nn.Linear(d_model, d_out_kq)
+        self.W_value = nn.Linear(d_model, d_out_v)
     
     def forward(self, x_1, x_2):
-        queries_1 = x_1.matmul(self.W_query)
-        keys_2 = x_2.matmul(self.W_key)
-        values_2 = x_2.matmul(self.W_value)
+        queries_1 = self.W_query(x_1)
+        keys_2 = self.W_key(x_2)
+        values_2 = self.W_value(x_2)
         
         attn_scores = queries_1.matmul(keys_2.transpose(-2, -1))
         attn_weights = torch.softmax(attn_scores / self.d_out_kq**0.5, dim=-1)
@@ -98,10 +98,11 @@ class CrossAttention(nn.Module):
         context_vec = attn_weights.matmul(values_2)
         return context_vec
 
+
 class CustomTransformerDecoderLayer(nn.Module):
     def __init__(self, d_model, d_out_kq, d_out_v, dim_feedforward=2048, dropout=0.1):
         super(CustomTransformerDecoderLayer, self).__init__()
-        # self.self_attn = nn.MultiheadAttention(d_model, 1, dropout=dropout) # Self-attention: tgt, tgt, tgt
+        self.self_attn = nn.MultiheadAttention(d_model, 1, dropout=dropout) # Self-attention: tgt, tgt, tgt
         self.cross_attention = CrossAttention(d_model, d_out_kq, d_out_v)
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
@@ -115,9 +116,9 @@ class CustomTransformerDecoderLayer(nn.Module):
 
     def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
         # Self-attention
-        # tgt2, _ = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask)
-        # tgt = tgt + self.dropout1(tgt2)
-        # tgt = self.norm1(tgt)
+        tgt2, _ = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask)
+        tgt = tgt + self.dropout1(tgt2)
+        tgt = self.norm1(tgt)
         
         # Cross-attention
         tgt2 = self.cross_attention(tgt, memory)
@@ -207,6 +208,24 @@ class CommandTransformer(nn.Module):
 
         return outputs
 
+# model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
+# input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
+
+# while True:
+#     pred = model(pt_cloud_encoded_features, input_emb)
+#     command, parameters = select_parameters(*pred)
+#     print(command)
+#     print (parameters[0])
+#     output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
+    
+#     input_emb = torch.cat((input_emb, output_emb), dim=0).cuda()  # Concatenate along the sequence dimension
+
+#     if command == Commands.STOP:
+#         break
+
+# print(input_emb)
+# print(input_emb.shape)
+
 model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
 input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
 
@@ -214,14 +233,16 @@ while True:
     pred = model(pt_cloud_encoded_features, input_emb)
     command, parameters = select_parameters(*pred)
     print(command)
-    print (parameters[0])
+    print(parameters[0])
     output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
     
     input_emb = torch.cat((input_emb, output_emb), dim=0).cuda()  # Concatenate along the sequence dimension
+
+    # Flatten input_emb
+    input_emb = input_emb.view(-1, 512)  # Flatten to shape (N*11, 512)
 
     if command == Commands.STOP:
         break
 
 print(input_emb)
 print(input_emb.shape)
-
