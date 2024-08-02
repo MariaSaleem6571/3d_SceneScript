@@ -34,7 +34,7 @@ class Commands(Enum):
 class TransformerOutputLayer(nn.Module):
     def __init__(self, transformer_dim):
         super(TransformerOutputLayer, self).__init__()
-        self.command_layer = nn.Linear(transformer_dim, 5)  
+        self.command_layer = nn.Linear(transformer_dim, 5)  # Output 5 command logits (START included)
         self.param_layer = nn.Linear(transformer_dim, 6)  # Output 6 params for wall, doors, windows 
 
     def forward(self, x):
@@ -45,7 +45,7 @@ class TransformerOutputLayer(nn.Module):
 
         command_probs = F.softmax(command_logits, dim=-1)  # Shape: (batch_size, sequence_length, 5)
         parameter_logits = self.param_layer(x)  # Shape: (batch_size, sequence_length, 6)
-        parameters_probs = torch.tanh(parameter_logits)  # Shape: (batch_size, sequence_length, 6) # tanh ko kese lao gi wapis raw logits mein ispe socho
+        parameters_probs = torch.tanh(parameter_logits)  # Shape: (batch_size, sequence_length, 6) 
         return command_probs, parameters_probs
 
 def select_parameters(command_probs, parameters_probs):
@@ -182,29 +182,33 @@ class CommandTransformer(nn.Module):
 
     def forward(self, src: torch.Tensor, tgt: torch.Tensor):
         src_emb = src.unsqueeze(0).cuda()  # Adding batch dimension
-        # print(f"Original tgt shape: {tgt.shape}")
 
+        print(f"Original tgt shape: {tgt.shape}")
+
+        # Apply linear layer to project each element to 512 dimensions
         tgt = tgt.view(-1, 11)  # Shape: (batch_size*sequence_length, 11)
-        # tgt = self.linear(tgt)  # Shape: (batch_size*sequence_length, 512)
+        tgt = self.linear(tgt)  # Shape: (batch_size*sequence_length, 512)
         tgt = tgt.view(1, -1, 512)  # Reshape back to (1, N*11, 512)
-        # print(f"Shape after linear layer: {tgt.shape}")
+        print(f"Shape after linear layer: {tgt.shape}")
 
         tgt_emb = self.pos_encoder(tgt)
-        # print(f"Shape after positional encoding: {tgt_emb.shape}")
+        print(f"Shape after positional encoding: {tgt_emb.shape}")
 
         # Transformer forward pass
         transformer_output = self.transformer(tgt_emb, src_emb)
-        # print(f"Transformer input shape: {tgt_emb.shape}")
-        # print(f"Transformer output shape: {transformer_output.shape}")
+        print(f"Transformer input shape: {tgt_emb.shape}")
+        print(f"Transformer output shape: {transformer_output.shape}")
 
         # Output layer forward pass
         outputs = self.output_layer(transformer_output)
-        # print(f"Output layer shapes: command_probs: {outputs[0].shape}, parameters_probs: {outputs[1].shape}")
+        print(f"Output layer shapes: command_probs: {outputs[0].shape}, parameters_probs: {outputs[1].shape}")
 
         return outputs
 
 model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
 input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
+
+# Initialize the input tensor for the first iteration
 input_emb_proj = model.linear(input_emb).unsqueeze(1)  # Shape: (1, 1, 512)
 input_emb_proj = input_emb_proj.repeat(1, 11, 1)  # Shape: (1, 11, 512)
 
@@ -225,5 +229,5 @@ while True:
     if command == Commands.STOP:
         break
 
-# print(input_emb_proj)
+print(input_emb_proj)
 print(input_emb_proj.shape)
