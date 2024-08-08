@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from enum import Enum
-from test_gt import SceneScriptProcessor
+from test_gt_N import SceneScriptProcessor
 import matplotlib.pyplot as plt
 
 # Initialize the models and other components
