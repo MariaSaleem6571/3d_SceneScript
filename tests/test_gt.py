@@ -232,6 +232,8 @@ class SceneScriptProcessor:
         df_door = df_door.drop(columns=['wall0_id', 'wall1_id'])
         df_window = df_window.drop(columns=['wall0_id', 'wall1_id'])
 
+        print(len(df_wall.columns), len(df_door.columns), len(df_window.columns))
+
         return df_wall, df_door, df_window
 
     def convert_to_vectors(self, df):

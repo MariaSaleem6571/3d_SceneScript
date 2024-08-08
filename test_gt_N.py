@@ -78,7 +78,7 @@ class SceneScriptProcessor:
         if not df_window.empty:
             df_window = df_window.drop(columns=[col for col in columns_to_drop_window if col in df_window.columns], errors='ignore')
 
-        print(len(df_wall.columns), len(df_door.columns), len(df_window.columns))
+        # print(len(df_wall.columns), len(df_door.columns), len(df_window.columns)) #DEBUG
 
         return df_wall, df_door, df_window
 
@@ -86,10 +86,12 @@ class SceneScriptProcessor:
         return df.to_numpy()
 
     def normalize_dataframe(self, df):
-        one_hot_columns = [col for col in df.columns if col.startswith('type_')]
-        numeric_columns = [col for col in df.columns if col not in one_hot_columns]
-        df_numeric_normalized = df[numeric_columns].div(df[numeric_columns].max(axis=0), axis=1)
-        df_normalized = pd.concat([df[one_hot_columns], df_numeric_normalized], axis=1)
+        df_normalized = df.copy()
+        for column in df.columns:
+            if column.startswith('type'):
+                continue
+            if column in ['width', 'theta', 'xcenter', 'ycenter']:
+                df_normalized[column] = (df[column] - df[column].mean()) / df[column].std()
         return df_normalized
 
     def process(self):
@@ -102,7 +104,7 @@ class SceneScriptProcessor:
 
         def process_embeddings(dataframe):
             input_dim = dataframe.shape[1]
-            self.initialize_network(input_dim)  
+            self.initialize_network(input_dim)
             embeddings = []
 
             for i in range(len(dataframe)):
@@ -130,12 +132,16 @@ class SceneScriptProcessor:
         start_embeddings = self.embedding_processing_network(start_combined_tensor)
         stop_embeddings = self.embedding_processing_network(stop_combined_tensor)
 
-        all_embeddings = [start_embeddings] + all_embeddings + [stop_embeddings]
-        final_embeddings = torch.cat(all_embeddings, dim=0).unsqueeze(0)
+        decoder_input_embeddings = [start_embeddings] + all_embeddings
+        gt_output_embeddings = all_embeddings + [stop_embeddings]
 
-        return final_embeddings
+        decoder_input_embeddings = torch.cat(decoder_input_embeddings, dim=0).unsqueeze(0)
+        gt_output_embeddings = torch.cat(gt_output_embeddings, dim=0).unsqueeze(0)
+
+        return decoder_input_embeddings, gt_output_embeddings
 
 if __name__ == '__main__':
     processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_scene_language.txt')
-    embeddings = processor.process()
-    print("Shape of final_embeddings:", embeddings.shape)
+    decoder_input_embeddings, gt_output_embeddings = processor.process()
+    print("Shape of decoder_input_embeddings:", decoder_input_embeddings.shape)
+    print("Shape of gt_output_embeddings:", gt_output_embeddings.shape)
