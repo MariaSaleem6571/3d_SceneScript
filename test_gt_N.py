@@ -82,18 +82,17 @@ class SceneScriptProcessor:
 
         return df_wall, df_door, df_window
 
-    def convert_to_vectors(self, df):
-        return df.to_numpy()
-
     def normalize_dataframe(self, df):
         df_normalized = df.copy()
-        for column in df.columns:
+        numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+
+        for column in numeric_columns:
             if column.startswith('type'):
                 continue
-            if column in ['width', 'theta', 'xcenter', 'ycenter']:
-                df_normalized[column] = (df[column] - df[column].mean()) / df[column].std()
-        return df_normalized
+            df_normalized[column] = (df[column] - df[column].mean()) / df[column].std()
 
+        return df_normalized
+    
     def process(self):
         df_wall, df_door, df_window = self.read_script_to_dataframe()
 
