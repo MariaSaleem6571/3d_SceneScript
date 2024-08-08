@@ -256,7 +256,7 @@ class TransformerOutputLayer(nn.Module):
 
     def forward(self, x):
         command_logits = self.command_layer(x)
-        command_logits[..., 0] = -float('inf')
+        command_logits[..., 0] = -float('inf')  # Mask out the first position
         command_probs = F.softmax(command_logits, dim=-1)
         parameter_logits = self.param_layer(x)
         parameters_probs = torch.tanh(parameter_logits)
@@ -310,7 +310,7 @@ class CrossAttention(nn.Module):
         attn_weights = torch.softmax(attn_scores / self.d_out_kq**0.5, dim=-1)
 
         context_vec = attn_weights.matmul(values_2)
-        return context_vec
+        return context_vec, attn_scores
 
 class CustomTransformerDecoderLayer(nn.Module):
     def __init__(self, d_model, d_out_kq, d_out_v, dim_feedforward=2048, dropout=0.1):
@@ -332,14 +332,14 @@ class CustomTransformerDecoderLayer(nn.Module):
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
-        tgt2 = self.cross_attention(tgt, memory)
+        tgt2, attn_scores = self.cross_attention(tgt, memory)
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
 
         tgt2 = self.linear2(self.dropout(F.relu(self.linear1(tgt))))
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
-        return tgt
+        return tgt, attn_scores
 
 class CustomTransformerDecoder(nn.Module):
     def __init__(self, d_model, d_out_kq, d_out_v, num_decoder_layers, dim_feedforward, dropout=0.1):
@@ -349,10 +349,12 @@ class CustomTransformerDecoder(nn.Module):
         ])
 
     def forward(self, tgt, memory, tgt_mask=None, memory_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
+        attn_scores_list = []
         for layer in self.layers:
-            tgt = layer(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
+            tgt, attn_scores = layer(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
                         tgt_key_padding_mask=tgt_key_padding_mask, memory_key_padding_mask=memory_key_padding_mask)
-        return tgt
+            attn_scores_list.append(attn_scores)
+        return tgt, attn_scores_list
 
 def construct_embedding_vector_from_vocab(command: Commands, parameters: torch.Tensor):
     num_classes = len(Commands)
@@ -385,37 +387,45 @@ class CommandTransformer(nn.Module):
         self.transformer = CustomTransformerDecoder(d_model, d_model, d_model, num_layers, 2048).cuda()
         self.output_layer = TransformerOutputLayer(d_model).cuda()
         self.linear = nn.Linear(11, 512).cuda()
+        self.final_linear = nn.Linear(512, 11).cuda()
 
     def forward(self, src: torch.Tensor, tgt: torch.Tensor):
         src_emb = src.unsqueeze(0).cuda()
 
-        tgt = tgt.view(-1, 11)
         tgt = tgt.view(1, -1, 512)
-
         tgt_emb = self.pos_encoder(tgt)
 
-        transformer_output = self.transformer(tgt_emb, src_emb)
+        transformer_output, attn_scores_list = self.transformer(tgt_emb, src_emb)
 
+        # No need to reshape transformer_output, it should already be (1, N, 512)
         outputs = self.output_layer(transformer_output)
 
-        return outputs
+        return outputs, attn_scores_list
 
 model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
 input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
 input_emb_proj = model.linear(input_emb).unsqueeze(1)
-input_emb_proj = input_emb_proj.repeat(1, 11, 1)
+
+# Tensor to accumulate all predictions
+accumulated_predictions = input_emb_proj
 
 while True:
-    pred = model(pt_cloud_encoded_features, input_emb_proj)
+    pred, attn_scores_list = model(pt_cloud_encoded_features, accumulated_predictions)
     command, parameters = select_parameters(*pred)
-    print(command)
-    print(parameters[0])
+    print("Command:", command)
+    print("Shape of input to prediction:", accumulated_predictions.shape)
+    
+    # Apply the final linear layer to the current prediction to get the output in shape (1, N, 11)
     output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
-
     output_emb_proj = model.linear(output_emb).unsqueeze(1)
-    output_emb_proj = output_emb_proj.repeat(1, 11, 1)
-
-    input_emb_proj = torch.cat((input_emb_proj, output_emb_proj), dim=1).cuda()
+    
+    # Print the parameters in the desired shape
+    output_parameters = model.final_linear(output_emb_proj)
+    print("Output parameters shape:", output_parameters.shape)
+    print(output_parameters)
+    
+    # Concatenate the current output to the accumulated predictions
+    accumulated_predictions = torch.cat((accumulated_predictions, output_emb_proj), dim=1)
 
     if command == Commands.STOP:
         break
@@ -424,7 +434,18 @@ processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_sce
 gt_embeddings = processor.process()
 gt_embeddings_tensor = torch.tensor(gt_embeddings).cuda()
 positional_encoding = PositionalEncoding(gt_embeddings_tensor.shape[-1]).cuda()
-gt_embeddings_tensor = positional_encoding(gt_embeddings_tensor)
+gt_embeddings_tensor = positional_encoding(gt_embeddings_tensor).cuda()
 
-print(input_emb_proj.shape)
-print(gt_embeddings_tensor.shape)
+print("Final accumulated predictions shape:", accumulated_predictions.shape)
+print("Ground truth embeddings shape:", gt_embeddings_tensor.shape)
+
+# Ensure the shape of the prediction tensor is (1, N, 512)
+predicted_shape = accumulated_predictions.shape
+N = predicted_shape[1]
+assert predicted_shape[2] == 512, "The last dimension is not 512, cannot reshape correctly"
+
+# Apply the final linear layer to project to the final output shape
+linear_layer = nn.Linear(512, 11).cuda()
+output = linear_layer(accumulated_predictions)
+
+print("Final output shape:", output.shape)
