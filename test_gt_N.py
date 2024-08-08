@@ -43,42 +43,42 @@ class SceneScriptProcessor:
         parts = line.split(',')
         record_type = parts[0].strip()
         one_hot_vector = Commands.get_one_hot(record_type)
-        record_dict = {f'type_{i+1}': val for i, val in enumerate(one_hot_vector)}
-        for part in parts[1:]:
-            key, value = part.split('=')
-            record_dict[key.strip()] = float(value) if '.' in value else int(value)
-        return record_dict
+        parameters = [float(part.split('=')[1]) for part in parts[1:]]
+        vector = np.concatenate([one_hot_vector, parameters])
+        return vector
 
-    #data preprocessing
     def read_script_to_dataframe(self):
         with open(self.file_path, 'r') as file:
             records = [self.parse_line(line.strip()) for line in file if line.strip()]
 
-        df_wall = pd.DataFrame([r for r in records if r['type_3'] == 1])
-        df_door = pd.DataFrame([r for r in records if r['type_5'] == 1])
-        df_window = pd.DataFrame([r for r in records if r['type_4'] == 1])
+        df = pd.DataFrame(records, columns=[f'type_{i+1}' for i in range(len(Commands))] + [f'param_{i+1}' for i in range(records[0].shape[0] - len(Commands))])
+
+        df_wall = df[df['type_3'] == 1].copy()
+        df_door = df[df['type_5'] == 1].copy()
+        df_window = df[df['type_4'] == 1].copy()
 
         if not df_wall.empty:
-            df_wall['deltax'] = df_wall['b_x'] - df_wall['a_x']
-            df_wall['deltay'] = df_wall['b_y'] - df_wall['a_y']
-            df_wall['width'] = np.sqrt(df_wall['deltax']**2 + df_wall['deltay']**2)
-            df_wall['theta'] = np.degrees(np.arctan2(df_wall['deltay'], df_wall['deltax']))
-            df_wall['xcenter'] = (df_wall['a_x'] + df_wall['b_x']) / 2
-            df_wall['ycenter'] = (df_wall['a_y'] + df_wall['b_y']) / 2
+            df_wall.loc[:, 'deltax'] = df_wall['param_2'] - df_wall['param_1']
+            df_wall.loc[:, 'deltay'] = df_wall['param_4'] - df_wall['param_3']
+            df_wall.loc[:, 'width'] = np.sqrt(df_wall['deltax']**2 + df_wall['deltay']**2)
+            df_wall.loc[:, 'theta'] = np.degrees(np.arctan2(df_wall['deltay'], df_wall['deltax']))
+            df_wall.loc[:, 'xcenter'] = (df_wall['param_1'] + df_wall['param_2']) / 2
+            df_wall.loc[:, 'ycenter'] = (df_wall['param_3'] + df_wall['param_4']) / 2
 
-        columns_to_drop = ['a_x', 'a_y', 'a_z', 'b_x', 'b_y', 'b_z', 'thickness', 'deltax', 'deltay']
+        columns_to_drop = ['param_1', 'param_2', 'param_3', 'param_4', 'param_5', 'param_6', 'deltax', 'deltay']
         if not df_wall.empty:
             df_wall = df_wall.drop(columns=[col for col in columns_to_drop if col in df_wall.columns], errors='ignore')
-        
-        columns_to_drop_door = ['wall0_id', 'wall1_id']
+
+        columns_to_drop_door = ['param_7', 'param_8']
         if not df_door.empty:
             df_door = df_door.drop(columns=[col for col in columns_to_drop_door if col in df_door.columns], errors='ignore')
-        
-        columns_to_drop_window = ['wall0_id', 'wall1_id']
+
+        columns_to_drop_window = ['param_7', 'param_8']
         if not df_window.empty:
             df_window = df_window.drop(columns=[col for col in columns_to_drop_window if col in df_window.columns], errors='ignore')
 
         return df_wall, df_door, df_window
+
 
     def convert_to_vectors(self, df):
         return df.to_numpy()
@@ -100,7 +100,7 @@ class SceneScriptProcessor:
 
         def process_embeddings(dataframe):
             input_dim = dataframe.shape[1]
-            self.initialize_network(input_dim)  
+            self.initialize_network(input_dim)
             embeddings = []
 
             for i in range(len(dataframe)):
@@ -128,12 +128,16 @@ class SceneScriptProcessor:
         start_embeddings = self.embedding_processing_network(start_combined_tensor)
         stop_embeddings = self.embedding_processing_network(stop_combined_tensor)
 
-        all_embeddings = [start_embeddings] + all_embeddings + [stop_embeddings]
-        final_embeddings = torch.cat(all_embeddings, dim=0).unsqueeze(0)
+        decoder_input_embeddings = [start_embeddings] + all_embeddings
+        gt_output_embeddings = all_embeddings + [stop_embeddings]
 
-        return final_embeddings
+        decoder_input_embeddings = torch.cat(decoder_input_embeddings, dim=0).unsqueeze(0)
+        gt_output_embeddings = torch.cat(gt_output_embeddings, dim=0).unsqueeze(0)
+
+        return decoder_input_embeddings, gt_output_embeddings
 
 if __name__ == '__main__':
     processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_scene_language.txt')
-    embeddings = processor.process()
-    print("Shape of final_embeddings:", embeddings.shape)
+    decoder_input_embeddings, gt_output_embeddings = processor.process()
+    print("Shape of decoder_input_embeddings:", decoder_input_embeddings.shape)
+    print("Shape of gt_output_embeddings:", gt_output_embeddings.shape)
