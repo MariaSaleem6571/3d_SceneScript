@@ -214,19 +214,13 @@
 # print(gt_embeddings_tensor.shape)
 
 import torch
-from tests.point_cloud_sinusoidal_pt_cloud_no_vit import PointCloudTransformerLayer
+from three_d_scene_script.point_cloud_sinusoidal_pt_cloud_no_vit import PointCloudTransformerLayer
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 from enum import Enum
-from test_gt_N import SceneScriptProcessor
+from three_d_scene_script.gt_processor import SceneScriptProcessor
 
-# Encoder model initialization and point cloud processing
-encoder_model = PointCloudTransformerLayer().cuda()
-pt_cloud_path = "/home/mseleem/Desktop/3d_model_pt/0/semidense_points.csv.gz"
-points, dist_std = encoder_model.read_points_file(pt_cloud_path)
-sparse_tensor = encoder_model.process_point_cloud(points, dist_std)
-pt_cloud_encoded_features = encoder_model(sparse_tensor)
 
 class Commands(Enum):
     START = 1
@@ -402,50 +396,60 @@ class CommandTransformer(nn.Module):
 
         return outputs, attn_scores_list
 
-model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
-input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
-input_emb_proj = model.linear(input_emb).unsqueeze(1)
 
-# Tensor to accumulate all predictions
-accumulated_predictions = input_emb_proj
+if __name__ == "__main__":
 
-while True:
-    pred, attn_scores_list = model(pt_cloud_encoded_features, accumulated_predictions)
-    command, parameters = select_parameters(*pred)
-    print("Command:", command)
-    print("Shape of input to prediction:", accumulated_predictions.shape)
-    
-    # Apply the final linear layer to the current prediction to get the output in shape (1, N, 11)
-    output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
-    output_emb_proj = model.linear(output_emb).unsqueeze(1)
-    
-    # Print the parameters in the desired shape
-    output_parameters = model.final_linear(output_emb_proj)
-    print("Output parameters shape:", output_parameters.shape)
-    print(output_parameters)
-    
-    # Concatenate the current output to the accumulated predictions
-    accumulated_predictions = torch.cat((accumulated_predictions, output_emb_proj), dim=1)
+    # Encoder model initialization and point cloud processing
+    encoder_model = PointCloudTransformerLayer().cuda()
+    pt_cloud_path = "/home/mseleem/Desktop/3d_model_pt/0/semidense_points.csv.gz"
+    points, dist_std = encoder_model.read_points_file(pt_cloud_path)
+    sparse_tensor = encoder_model.process_point_cloud(points, dist_std)
+    pt_cloud_encoded_features = encoder_model(sparse_tensor)
 
-    if command == Commands.STOP:
-        break
+    model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
+    input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
+    input_emb_proj = model.linear(input_emb).unsqueeze(1)
 
-processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_scene_language.txt')
-gt_embeddings = processor.process()
-gt_embeddings_tensor = torch.tensor(gt_embeddings).cuda()
-positional_encoding = PositionalEncoding(gt_embeddings_tensor.shape[-1]).cuda()
-gt_embeddings_tensor = positional_encoding(gt_embeddings_tensor).cuda()
+    # Tensor to accumulate all predictions
+    accumulated_predictions = input_emb_proj
 
-print("Final accumulated predictions shape:", accumulated_predictions.shape)
-print("Ground truth embeddings shape:", gt_embeddings_tensor.shape)
+    while True:
+        pred, attn_scores_list = model(pt_cloud_encoded_features, accumulated_predictions)
+        command, parameters = select_parameters(*pred)
+        print("Command:", command)
+        print("Shape of input to prediction:", accumulated_predictions.shape)
 
-# Ensure the shape of the prediction tensor is (1, N, 512)
-predicted_shape = accumulated_predictions.shape
-N = predicted_shape[1]
-assert predicted_shape[2] == 512, "The last dimension is not 512, cannot reshape correctly"
+        # Apply the final linear layer to the current prediction to get the output in shape (1, N, 11)
+        output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
+        output_emb_proj = model.linear(output_emb).unsqueeze(1)
 
-# Apply the final linear layer to project to the final output shape
-linear_layer = nn.Linear(512, 11).cuda()
-output = linear_layer(accumulated_predictions)
+        # Print the parameters in the desired shape
+        output_parameters = model.final_linear(output_emb_proj)
+        print("Output parameters shape:", output_parameters.shape)
+        print(output_parameters)
 
-print("Final output shape:", output.shape)
+        # Concatenate the current output to the accumulated predictions
+        accumulated_predictions = torch.cat((accumulated_predictions, output_emb_proj), dim=1)
+
+        if command == Commands.STOP:
+            break
+
+    processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_scene_language.txt')
+    gt_embeddings = processor.process()
+    gt_embeddings_tensor = torch.tensor(gt_embeddings).cuda()
+    positional_encoding = PositionalEncoding(gt_embeddings_tensor.shape[-1]).cuda()
+    gt_embeddings_tensor = positional_encoding(gt_embeddings_tensor).cuda()
+
+    print("Final accumulated predictions shape:", accumulated_predictions.shape)
+    print("Ground truth embeddings shape:", gt_embeddings_tensor.shape)
+
+    # Ensure the shape of the prediction tensor is (1, N, 512)
+    predicted_shape = accumulated_predictions.shape
+    N = predicted_shape[1]
+    assert predicted_shape[2] == 512, "The last dimension is not 512, cannot reshape correctly"
+
+    # Apply the final linear layer to project to the final output shape
+    linear_layer = nn.Linear(512, 11).cuda()
+    output = linear_layer(accumulated_predictions)
+
+    print("Final output shape:", output.shape)
