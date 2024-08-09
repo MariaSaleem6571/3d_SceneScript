@@ -4,8 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 from torch import nn
-import torchsparse
-import torchsparse.nn as spnn
+from torchsparse import nn as spnn
 from torchsparse import SparseTensor
 
 class PointCloudTransformerLayer(nn.Module):
