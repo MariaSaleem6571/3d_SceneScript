@@ -87,7 +87,7 @@ index_to_token = {idx: token for token, idx in token_to_index.items()}
 
 
 VOCAB_SIZE = len(vocab) + PARAM_SIZE
-print(f"Size of the vocabulary: {vocab_size}")
+print(f"Size of the vocabulary: {VOCAB_SIZE}")
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
@@ -161,7 +161,7 @@ class CommandTransformer(nn.Module):
 
     def forward(self, src: torch.Tensor, tgt: torch.Tensor):
         src_emb = self.point_cloud_encoder(src)
-        # tgt_emb = self.construct_embedding_vector_from_vocab(command, parameters)  # (seq_len, batch_size, d_model)
+        tgt_emb = self.construct_embedding_vector_from_vocab(command, parameters)  # (seq_len, batch_size, d_model)
         tgt_emb = self.pos_encoder(tgt_emb)
         transformer_output = self.transformer(src_emb, tgt_emb)  # (tgt_seq_len, batch_size, d_model)
         
@@ -171,19 +171,21 @@ class CommandTransformer(nn.Module):
         return ouputs
 
 
-model = CommandTransformer(vocab_size=vocab_size)
-input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(12)).unsqueeze(-1)
-point_cloud_tensor = torch.zeros((433426,6))
+if __name__ == "__main__":
 
-while True:
-    pred = model(point_cloud_tensor, input_emb)
-    command, parameters = select_parameters(*pred)
-    output_emb = construct_embedding_vector_from_vocab(command, parameters)
-    input_emb = torch.cat(input_emb, output_emb.unsqueeze(-1))
-    if command == Commands.STOP:
-        break
+    model = CommandTransformer(vocab_size=VOCAB_SIZE)
+    input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(12)).unsqueeze(-1)
+    point_cloud_tensor = torch.zeros((433426,6))
 
-print(input_emb)
+    while True:
+        pred = model(point_cloud_tensor, input_emb)
+        command, parameters = select_parameters(*pred)
+        output_emb = construct_embedding_vector_from_vocab(command, parameters)
+        input_emb = torch.cat(input_emb, output_emb.unsqueeze(-1))
+        if command == Commands.STOP:
+            break
+
+    print(input_emb)
 
 # def generate_sequence(model):
 #     input_seq = torch.tensor([token_to_index["START"]]).unsqueeze(1)  # Start with the START token

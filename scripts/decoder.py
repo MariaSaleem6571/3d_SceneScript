@@ -1,18 +1,13 @@
+import os
+
 import torchsparse
-# from three_d_scene_script.point_cloud_processor import PointCloudTransformerLayer
-from tests.point_cloud_processor import PointCloudTransformerLayer
+from three_d_scene_script.point_cloud_processor import PointCloudTransformerLayer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 from enum import Enum
 
-
-# Example usage for reading from a file:
-pt_cloud_path = "/home/mseleem/Desktop/3d_model_pt/0/semidense_points.csv.gz"
-point_cloud_reader = PointCloudTransformerLayer().cuda()
-point_cloud, dist_std = point_cloud_reader.read_points_file(pt_cloud_path)
-point_cloud_tensor = point_cloud_reader.process_point_cloud(point_cloud, dist_std)
 
 class Commands(Enum):
     START = 1
@@ -131,17 +126,27 @@ class CommandTransformer(nn.Module):
         outputs = self.output_layer(transformer_output)  # (tgt_seq_len, batch_size, vocab_size)
         return outputs
 
-model = CommandTransformer().cuda()
-input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).unsqueeze(-1).cuda()
 
-while True:
-    # noinspection PyPackageRequirements
-    pred = model(point_cloud_tensor, input_emb)
-    command, parameters = select_parameters(*pred)
-    output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
-    input_emb = torch.cat(input_emb, output_emb.unsqueeze(-1)).cuda()
+if __name__ == "__main__":
 
-    if command == Commands.STOP:
-        break
+    # Example usage for reading from a file:
+    cwd = os.getcwd()
+    pt_cloud_path = os.path.join(cwd, "../0/semidense_points.csv.gz")
+    point_cloud_reader = PointCloudTransformerLayer().cuda()
+    point_cloud, dist_std = point_cloud_reader.read_points_file(pt_cloud_path)
+    point_cloud_tensor = point_cloud_reader.process_point_cloud(point_cloud, dist_std)
 
-print(input_emb)
+    model = CommandTransformer().cuda()
+    input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).unsqueeze(-1).cuda()
+
+    while True:
+        # noinspection PyPackageRequirements
+        pred = model(point_cloud_tensor, input_emb)
+        command, parameters = select_parameters(*pred)
+        output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
+        input_emb = torch.cat(input_emb, output_emb.unsqueeze(-1)).cuda()
+
+        if command == Commands.STOP:
+            break
+
+    print(input_emb)

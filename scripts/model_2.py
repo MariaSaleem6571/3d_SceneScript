@@ -1,5 +1,5 @@
 import torch
-from tests.point_cloud_sinusoidal_pt_cloud_no_vit import PointCloudTransformerLayer
+from three_d_scene_script.point_cloud_sinusoidal_pt_cloud_no_vit import PointCloudTransformerLayer
 import torch.nn as nn
 import torch.nn.functional as F
 import math
@@ -186,65 +186,67 @@ class CommandTransformer(nn.Module):
 
         return outputs
 
-# Initialize the model, optimizer, and loss function
-model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-criterion = nn.MSELoss()
 
-processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_scene_language.txt')
-gt_embeddings = processor.process()
-gt_embeddings_tensor = torch.tensor(gt_embeddings).cuda()
-positional_encoding = PositionalEncoding(gt_embeddings_tensor.shape[-1]).cuda()
-gt_embeddings_tensor = positional_encoding(gt_embeddings_tensor)
+if __name__ == "__main__":
+    # Initialize the model, optimizer, and loss function
+    model = CommandTransformer(vocab_size=VOCAB_SIZE).cuda()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    criterion = nn.MSELoss()
 
-# Define number of epochs
-num_epochs = 300
+    processor = SceneScriptProcessor('/home/mseleem/Desktop/3d_SceneScript/0/ase_scene_language.txt')
+    gt_embeddings = processor.process()
+    gt_embeddings_tensor = torch.tensor(gt_embeddings).cuda()
+    positional_encoding = PositionalEncoding(gt_embeddings_tensor.shape[-1]).cuda()
+    gt_embeddings_tensor = positional_encoding(gt_embeddings_tensor)
 
-# List to store the loss values
-losses = []
+    # Define number of epochs
+    num_epochs = 300
 
-# Training loop
-for epoch in range(num_epochs):
-    input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
-    input_emb_proj = model.linear(input_emb).unsqueeze(1)
-    input_emb_proj = input_emb_proj.repeat(1, 11, 1)
+    # List to store the loss values
+    losses = []
 
-    model.train()
-    epoch_loss = 0
-    for step in range(gt_embeddings_tensor.size(0)):
-        optimizer.zero_grad()
+    # Training loop
+    for epoch in range(num_epochs):
+        input_emb = construct_embedding_vector_from_vocab(Commands.START, torch.zeros(6).cuda()).cuda()
+        input_emb_proj = model.linear(input_emb).unsqueeze(1)
+        input_emb_proj = input_emb_proj.repeat(1, 11, 1)
 
-        pred = model(pt_cloud_encoded_features, input_emb_proj)
-        command, parameters = select_parameters(*pred)
+        model.train()
+        epoch_loss = 0
+        for step in range(gt_embeddings_tensor.size(0)):
+            optimizer.zero_grad()
 
-        output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
-        output_emb_proj = model.linear(output_emb).unsqueeze(1)
-        output_emb_proj = output_emb_proj.repeat(1, 11, 1)
+            pred = model(pt_cloud_encoded_features, input_emb_proj)
+            command, parameters = select_parameters(*pred)
 
-        input_emb_proj = torch.cat((input_emb_proj, output_emb_proj), dim=1).cuda()
+            output_emb = construct_embedding_vector_from_vocab(command, parameters).cuda()
+            output_emb_proj = model.linear(output_emb).unsqueeze(1)
+            output_emb_proj = output_emb_proj.repeat(1, 11, 1)
 
-        # Compute loss with the revealed ground truth
-        loss = criterion(input_emb_proj[:, -1, :], gt_embeddings_tensor[step].unsqueeze(0))
+            input_emb_proj = torch.cat((input_emb_proj, output_emb_proj), dim=1).cuda()
 
-        loss.backward()
-        optimizer.step()
+            # Compute loss with the revealed ground truth
+            loss = criterion(input_emb_proj[:, -1, :], gt_embeddings_tensor[step].unsqueeze(0))
 
-        epoch_loss += loss.item()
+            loss.backward()
+            optimizer.step()
 
-        if command == Commands.STOP:
-            break
+            epoch_loss += loss.item()
 
-    avg_loss = epoch_loss / gt_embeddings_tensor.size(0)
-    losses.append(avg_loss)
-    print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss}")
+            if command == Commands.STOP:
+                break
+
+        avg_loss = epoch_loss / gt_embeddings_tensor.size(0)
+        losses.append(avg_loss)
+        print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss}")
 
 
-plt.figure()  
-plt.plot(losses)
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.title('Training Loss Over Epochs')
-plt.grid(True)  
-plt.show()
+    plt.figure()
+    plt.plot(losses)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Over Epochs')
+    plt.grid(True)
+    plt.show()
 
-print("Training complete.")
+    print("Training complete.")
