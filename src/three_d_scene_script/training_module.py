@@ -168,15 +168,26 @@ def train_model(num_epochs, model, optimizer, scheduler, pt_cloud_encoded_featur
 
     return total_loss_list, command_loss_list, parameter_loss_list, last_epoch_predictions, last_epoch_ground_truths
 
+import plotly.graph_objects as go
+
 def plot_losses(total_loss_list, command_loss_list, parameter_loss_list, num_epochs):
     """
     Plot the losses
 
-    :param total_loss_list: The total loss list
-    :param command_loss_list: The command loss list
-    :param parameter_loss_list: The parameter loss list
+    :param total_loss_list: The total loss list (can be a list of tensors or numpy arrays)
+    :param command_loss_list: The command loss list (can be a list of tensors or numpy arrays)
+    :param parameter_loss_list: The parameter loss list (can be a list of tensors or numpy arrays)
     :param num_epochs: The number of epochs
     """
+    def ensure_list(data):
+        if isinstance(data[0], torch.Tensor):
+            data = [d.detach().cpu().item() for d in data]
+        return data
+
+    total_loss_list = ensure_list(total_loss_list)
+    command_loss_list = ensure_list(command_loss_list)
+    parameter_loss_list = ensure_list(parameter_loss_list)
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(num_epochs)), y=total_loss_list, mode='lines', name='Total Loss', line=dict(color='blue')))
     fig.add_trace(go.Scatter(x=list(range(num_epochs)), y=command_loss_list, mode='lines', name='Command Loss', line=dict(color='green')))
@@ -188,6 +199,7 @@ def plot_losses(total_loss_list, command_loss_list, parameter_loss_list, num_epo
         hovermode='x',
     )
     fig.show()
+
 
 def print_last_epoch_results(last_epoch_predictions, last_epoch_ground_truths):
     """

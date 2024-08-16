@@ -4,8 +4,8 @@ from three_d_scene_script.training_module import (
     configure_model,
     initialize_optimizers,
     train_model,
-    plot_losses,
-    print_last_epoch_results
+    print_last_epoch_results,
+    plot_losses
 )
 import os
 
