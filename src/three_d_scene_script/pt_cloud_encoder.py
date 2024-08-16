@@ -92,10 +92,3 @@ class SparseResNetEncoder(nn.Module):
         x = self.conv5(x)
         return x
 
-if __name__ == '__main__':
-    model = PointCloudTransformerLayer().cuda()
-    pt_cloud_path = "/home/mseleem/Desktop/3d_model_pt/0/semidense_points.csv.gz"
-    points, dist_std = model.read_points_file(pt_cloud_path)
-    sparse_tensor = model.process_point_cloud(points, dist_std)
-    pt_cloud_encoded_features = model(sparse_tensor)
-    print("Encoded Features Shape:", pt_cloud_encoded_features.shape)

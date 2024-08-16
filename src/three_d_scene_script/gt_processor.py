@@ -1,11 +1,9 @@
+import os
 import pandas as pd
 import numpy as np
 import torch
-import torch.nn as nn
 from enum import Enum
-
-from typing_extensions import List
-
+from typing import List, Dict, Tuple, Optional
 
 class Commands(Enum):
     START = 1
@@ -15,137 +13,149 @@ class Commands(Enum):
     MAKE_DOOR = 5
 
     @classmethod
-    def get_one_hot(cls, command_type: str):
+    def get_one_hot(cls, command_type: str) -> np.ndarray:
+        """
+        Returns one-hot vector for the given command type
+
+        Args: 
+            command_type (str): The command type (e.g., 'START', 'STOP').
+        """
         command = cls[command_type.upper()]
         one_hot_vector = np.zeros(len(cls))
         one_hot_vector[command.value - 1] = 1
         return one_hot_vector
 
+class SceneScriptProcessor:
+    def __init__(self, file_path: str):
+        self.file_path = file_path
 
-class EmbeddingProcessingNetwork(nn.Module):
-    def __init__(self, input_dim, output_dim=512):
-        super(EmbeddingProcessingNetwork, self).__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, output_dim),
+    def process(self):
+        """
+        Reads, normalizes, and converts script data into embeddings.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Decoder input and ground truth output embeddings.
+        """
+        all_data = torch.cat([
+            torch.tensor(self.normalize_dataframe(df).values, dtype=torch.float32)
+            for df in self.read_script_to_dataframe()
+        ], dim=0)
+
+        num_parameters = all_data.shape[1] - len(Commands)
+
+        return (
+            self.prepare_decoder_input_embeddings(self.generate_start_embedding(num_parameters), all_data),
+            self.prepare_gt_output_embeddings(all_data, self.generate_stop_embedding(num_parameters))
         )
 
-    def forward(self, x):
-        return self.fc(x)
+    def prepare_decoder_input_embeddings(self, start_tensor: torch.Tensor, sequence_data: torch.Tensor) -> torch.Tensor:
+        """
+        Prepares the decoder input embeddings by concatenating the start tensor with the sequence data.
 
+        Returns:
+            torch.Tensor: The decoder input embeddings.
+        """
+        return torch.cat([start_tensor] + [sequence_data[i, :].unsqueeze(0) for i in range(sequence_data.size(0))], dim=0).unsqueeze(0)
 
-class SceneScriptProcessor:
-    def __init__(self, file_path, output_dim=512):
-        self.file_path = file_path
-        self.output_dim = output_dim
-        self.embedding_processing_network = None
+    def prepare_gt_output_embeddings(self, sequence_data: torch.Tensor, stop_tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Prepares the ground truth output embeddings by concatenating the sequence data with the stop tensor.
 
-    def initialize_network(self, input_dim):
-        self.embedding_processing_network = EmbeddingProcessingNetwork(input_dim, self.output_dim)
+        Returns:
+            torch.Tensor: The ground truth output embeddings     
+        """
+        return torch.cat([sequence_data[i, :].unsqueeze(0) for i in range(sequence_data.size(0))] + [stop_tensor], dim=0).unsqueeze(0)
 
-    def parse_line(self, line):
+    def generate_start_embedding(self, num_parameters: int) -> torch.Tensor:
+        """
+        Generates the start embedding tensor.
+
+        Returns:
+            torch.Tensor: The start embedding tensor.
+        """
+        return torch.tensor(
+            np.concatenate([Commands.get_one_hot('START'), np.zeros(num_parameters)]),
+            dtype=torch.float32
+        ).unsqueeze(0)
+
+    def generate_stop_embedding(self, num_parameters: int) -> torch.Tensor:
+        """
+        Generates the stop embedding tensor.
+
+        Returns:
+            torch.Tensor: The stop embedding tensor.
+        """
+        return torch.tensor(
+            np.concatenate([Commands.get_one_hot('STOP'), np.zeros(num_parameters)]),
+            dtype=torch.float32
+        ).unsqueeze(0)
+
+    def read_script_to_dataframe(self) -> List[pd.DataFrame]:
+        """
+        Reads the script file and converts it into a list of dataframes.
+
+        Returns:
+            List[pd.DataFrame]: List of dataframes.
+        """
+
+        records = [self.parse_line(line.strip()) for line in open(self.file_path, 'r') if line.strip()]
+        return [
+            self.process_wall_dataframe(pd.DataFrame([r for r in records if r['type_3'] == 1])),
+            self.drop_unused_columns(pd.DataFrame([r for r in records if r['type_5'] == 1]), ['wall0_id', 'wall1_id']),
+            self.drop_unused_columns(pd.DataFrame([r for r in records if r['type_4'] == 1]), ['wall0_id', 'wall1_id'])
+        ]
+
+    def process_wall_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Processes the wall dataframe by calculating the width, theta, xcenter, and ycenter.
+
+        Returns:
+            pd.DataFrame: The processed wall dataframe.
+        """
+        if not df.empty:
+            df['deltax'], df['deltay'] = df['b_x'] - df['a_x'], df['b_y'] - df['a_y']
+            df['width'] = np.sqrt(df['deltax'] ** 2 + df['deltay'] ** 2)
+            df['theta'] = np.degrees(np.arctan2(df['deltay'], df['deltax']))
+            df['xcenter'], df['ycenter'] = (df['a_x'] + df['b_x']) / 2, (df['a_y'] + df['b_y']) / 2
+            return self.drop_unused_columns(df, ['a_x', 'a_y', 'a_z', 'b_x', 'b_y', 'b_z', 'thickness', 'deltax', 'deltay'])
+        return df
+
+    def normalize_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalizes the dataframe.
+
+        Returns:
+            pd.DataFrame: The normalized dataframe.
+        """
+        numeric_columns = [col for col in df.select_dtypes(include=[np.number]).columns if not col.startswith('type')]
+        for column in numeric_columns:
+            min_val, max_val = df[column].min(), df[column].max()
+            df[column] = 0 if min_val == max_val else (df[column] - min_val) / (max_val - min_val)
+        return df
+
+    def drop_unused_columns(self, df: pd.DataFrame, columns_to_drop: List[str]) -> pd.DataFrame:
+        """
+        Drops the unused columns from the dataframe.
+
+        Returns:
+            pd.DataFrame: The dataframe with unused columns dropped.
+        """
+        if not df.empty:
+            df = df.drop(columns=[col for col in columns_to_drop if col in df.columns], errors='ignore')
+        return df
+
+    def parse_line(self, line: str) -> Dict[str, float]:
+        """
+        Parses a line from the script file.
+
+        Returns:
+            Dict[str, float]: The parsed line.
+        """
         parts = line.split(',')
         record_type = parts[0].strip()
         one_hot_vector = Commands.get_one_hot(record_type)
-        record_dict = {f'type_{i + 1}': val for i, val in enumerate(one_hot_vector)}
+        record_dict = {f'type_{i+1}': val for i, val in enumerate(one_hot_vector)}
         for part in parts[1:]:
             key, value = part.split('=')
             record_dict[key.strip()] = float(value) if '.' in value else int(value)
         return record_dict
-
-    # data preprocessing
-    def read_script_to_dataframe(self) -> List[pd.DataFrame]:
-
-        with open(self.file_path, 'r') as file:
-            records = [self.parse_line(line.strip()) for line in file if line.strip()]
-
-        df_wall = pd.DataFrame([r for r in records if r['type_3'] == 1])
-        df_door = pd.DataFrame([r for r in records if r['type_5'] == 1])
-        df_window = pd.DataFrame([r for r in records if r['type_4'] == 1])
-
-        if not df_wall.empty:
-            df_wall['deltax'] = df_wall['b_x'] - df_wall['a_x']
-            df_wall['deltay'] = df_wall['b_y'] - df_wall['a_y']
-            df_wall['width'] = np.sqrt(df_wall['deltax'] ** 2 + df_wall['deltay'] ** 2)
-            df_wall['theta'] = np.degrees(np.arctan2(df_wall['deltay'], df_wall['deltax']))
-            df_wall['xcenter'] = (df_wall['a_x'] + df_wall['b_x']) / 2
-            df_wall['ycenter'] = (df_wall['a_y'] + df_wall['b_y']) / 2
-
-        columns_to_drop = ['a_x', 'a_y', 'a_z', 'b_x', 'b_y', 'b_z', 'thickness', 'deltax', 'deltay']
-        if not df_wall.empty:
-            df_wall = df_wall.drop(columns=[col for col in columns_to_drop if col in df_wall.columns], errors='ignore')
-
-        columns_to_drop_door = ['wall0_id', 'wall1_id']
-        if not df_door.empty:
-            df_door = df_door.drop(columns=[col for col in columns_to_drop_door if col in df_door.columns],
-                                   errors='ignore')
-
-        columns_to_drop_window = ['wall0_id', 'wall1_id']
-        if not df_window.empty:
-            df_window = df_window.drop(columns=[col for col in columns_to_drop_window if col in df_window.columns],
-                                       errors='ignore')
-
-        # print(len(df_wall.columns), len(df_door.columns), len(df_window.columns)) #DEBUG
-
-        return [df_wall, df_door, df_window]
-
-    def normalize_dataframe(self, df):
-        df_normalized = df.copy()
-        numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
-
-        for column in numeric_columns:
-            if column.startswith('type'):
-                continue
-            df_normalized[column] = (df[column] - df[column].mean()) / df[column].std()
-
-        return df_normalized
-
-    def process_embeddings(self, dataframe):
-        input_dim = dataframe.shape[1]
-        self.initialize_network(input_dim)
-        embeddings = []
-
-        for i in range(len(dataframe)):
-            combined_tensor = torch.tensor(dataframe.iloc[i].values, dtype=torch.float32).unsqueeze(0)
-            embedding = self.embedding_processing_network(combined_tensor)
-            embeddings.append(embedding)
-
-        return embeddings
-
-    def process(self):
-        all_data = self.read_script_to_dataframe()
-        all_data = self.normalize_and_concat_objects_data(all_data)
-        all_embeddings = self.process_embeddings(all_data)
-        num_parameters = all_data.shape[1] - len(Commands)
-        return (self.get_decoder_input_embeddings(all_embeddings, num_parameters),
-                self.get_gt_output_embeddings(all_embeddings, num_parameters))
-
-    def normalize_and_concat_objects_data(self, objects: List[pd.DataFrame]):
-        normalized_data = list(map(self.normalize_dataframe, objects))
-        return pd.concat(normalized_data, ignore_index=True)
-
-    def get_gt_output_embeddings(self, embeddings, number_of_parameters: int):
-        stop_embedding = self.process_stop_embedding(number_of_parameters)
-        gt_output_embeddings = embeddings + [stop_embedding]
-        gt_output_embeddings = torch.cat(gt_output_embeddings, dim=0).unsqueeze(0)
-        return gt_output_embeddings
-
-    def get_decoder_input_embeddings(self, embeddings, number_of_parameters: int):
-        start_embedding = self.process_start_embedding(number_of_parameters)
-        decoder_input_embeddings = [start_embedding] + embeddings
-        decoder_input_embeddings = torch.cat(decoder_input_embeddings, dim=0).unsqueeze(0)
-        return decoder_input_embeddings
-
-    def process_start_embedding(self, number_of_parameters: int):
-        return self.process_single_command_embedding(Commands.START, np.zeros(number_of_parameters))
-
-    def process_stop_embedding(self, number_of_parameters: int):
-        return self.process_single_command_embedding(Commands.STOP, np.zeros(number_of_parameters))
-
-    def process_single_command_embedding(self, command: Commands, parameters: np.ndarray):
-        command_vector = Commands.get_one_hot(command.name)
-        command_parameters_combined = np.concatenate([command_vector, parameters])
-        command_parameters_combined_tensor = torch.tensor(command_parameters_combined, dtype=torch.float32)
-        embedding = self.embedding_processing_network(command_parameters_combined_tensor)
-        return embedding.unsqueeze(0)

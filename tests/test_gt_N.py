@@ -14,5 +14,8 @@ class GroundTruthProcessorTestCase(TestCase):
 
     def test_process(self):
         decoder_input_embeddings, gt_output_embeddings = self.processor.process()
-        self.assertTrue(decoder_input_embeddings.shape[1:] == (16, 512))
-        self.assertTrue(gt_output_embeddings.shape[1:] == (16, 512))
+        self.assertTrue(decoder_input_embeddings.shape[1:] == (16, 11))
+        self.assertTrue(gt_output_embeddings.shape[1:] == (16, 11))
+
+    def test_decode(self):
+        pass
