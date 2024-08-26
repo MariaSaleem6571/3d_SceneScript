@@ -200,6 +200,39 @@ def plot_losses(total_loss_list, command_loss_list, parameter_loss_list, num_epo
     )
     fig.show()
 
+def plot_batch_losses(total_loss_list, command_loss_list, parameter_loss_list):
+    """
+    Plot the losses over the course of training for each batch.
+
+    :param total_loss_list: The total loss list (can be a list of tensors or numpy arrays)
+    :param command_loss_list: The command loss list (can be a list of tensors or numpy arrays)
+    :param parameter_loss_list: The parameter loss list (can be a list of tensors or numpy arrays)
+    """
+    def ensure_list(data):
+        if isinstance(data[0], torch.Tensor):
+            data = [d.detach().cpu().item() for d in data]
+        return data
+
+    total_loss_list = ensure_list(total_loss_list)
+    command_loss_list = ensure_list(command_loss_list)
+    parameter_loss_list = ensure_list(parameter_loss_list)
+
+    # Use the full range of accumulated losses for the x-axis (each batch is one step)
+    x_values = list(range(1, len(total_loss_list) + 1))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x_values, y=total_loss_list, mode='lines', name='Total Loss', line=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=x_values, y=command_loss_list, mode='lines', name='Command Loss', line=dict(color='green')))
+    fig.add_trace(go.Scatter(x=x_values, y=parameter_loss_list, mode='lines', name='Parameter Loss', line=dict(color='red')))
+    fig.update_layout(
+        title='Training Loss over Batches',
+        xaxis_title='Batch Index',
+        yaxis_title='Loss',
+        hovermode='x',
+    )
+    fig.show()
+
+
 
 def print_last_epoch_results(last_epoch_predictions, last_epoch_ground_truths):
     """
