@@ -36,10 +36,23 @@ class SceneScriptProcessor:
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Decoder input and ground truth output embeddings.
         """
-        all_data = torch.cat([
-            torch.tensor(self.normalize_dataframe(df).values, dtype=torch.float32)
-            for df in self.read_script_to_dataframe()
-        ], dim=0)
+        dataframes = self.read_script_to_dataframe()
+        tensors = []
+
+        for i, df in enumerate(dataframes):
+            tensor = torch.tensor(self.normalize_dataframe(df).values, dtype=torch.float32)
+
+            if tensor.numel() == 0:
+                print(f"Skipping empty tensor for {['walls', 'doors', 'windows'][i]}")
+                continue
+
+            print(f"{['Wall', 'Door', 'Window'][i]} tensor shape: {tensor.shape}")
+            tensors.append(tensor)
+
+        if tensors:
+            all_data = torch.cat(tensors, dim=0)
+        else:
+            raise ValueError(f"All tensors are empty for script {self.file_path}. Cannot proceed.")
 
         num_parameters = all_data.shape[1] - len(Commands)
 
@@ -47,6 +60,7 @@ class SceneScriptProcessor:
             self.prepare_decoder_input_embeddings(self.generate_start_embedding(num_parameters), all_data),
             self.prepare_gt_output_embeddings(all_data, self.generate_stop_embedding(num_parameters))
         )
+
 
     def prepare_decoder_input_embeddings(self, start_tensor: torch.Tensor, sequence_data: torch.Tensor) -> torch.Tensor:
         """
