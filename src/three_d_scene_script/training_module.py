@@ -146,29 +146,41 @@ def train_model(num_epochs, model, optimizer, scheduler, pt_cloud_encoded_featur
     :param pt_cloud_encoded_features: The point cloud encoded features
     :param decoder_input_embeddings: The decoder input embeddings
     :param gt_output_embeddings: The ground truth output embeddings
-    :return: total_loss_list, command_loss_list, parameter_loss_list, last_epoch_predictions, last_epoch_ground_truths
+    :return: average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list, last_epoch_predictions, last_epoch_ground_truths
     """
-    total_loss_list, command_loss_list, parameter_loss_list = [], [], []
+    average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list = [], [], []
     last_epoch_predictions, last_epoch_ground_truths = [], []
 
     for epoch in range(num_epochs):
-        total_loss, command_loss, parameter_loss, predictions, ground_truths = process_epoch(
-            epoch, num_epochs, model, optimizer, scheduler, pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings
-        )
+        accumulated_loss = 0.0
+        accumulated_command_loss = 0.0
+        accumulated_parameter_loss = 0.0
+        batch_count = 0
 
-        total_loss_list.append(total_loss)
-        command_loss_list.append(command_loss)
-        parameter_loss_list.append(parameter_loss)
+        for pt_cloud, decoder_input, gt_output in zip(pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings):
+            total_loss, command_loss, parameter_loss, predictions, ground_truths = process_epoch(
+                epoch, num_epochs, model, optimizer, scheduler, pt_cloud, decoder_input, gt_output
+            )
+
+            accumulated_loss += total_loss.item()
+            accumulated_command_loss += command_loss
+            accumulated_parameter_loss += parameter_loss
+
+            batch_count += 1
+
+        average_epoch_loss_list.append(accumulated_loss / batch_count)
+        average_epoch_command_loss_list.append(accumulated_command_loss / batch_count)
+        average_epoch_parameter_loss_list.append(accumulated_parameter_loss / batch_count)
+
+        print(f'Epoch {epoch + 1}/{num_epochs}, Average Total Loss: {accumulated_loss / batch_count}, '
+              f'Average Command Loss: {accumulated_command_loss / batch_count}, '
+              f'Average Parameter Loss: {accumulated_parameter_loss / batch_count}')
 
         if predictions and ground_truths:
             last_epoch_predictions = predictions
             last_epoch_ground_truths = ground_truths
 
-        print(f'Epoch {epoch + 1}/{num_epochs}, Total Loss: {total_loss}, Command Loss: {command_loss}, Parameter Loss: {parameter_loss}')
-
-    return total_loss_list, command_loss_list, parameter_loss_list, last_epoch_predictions, last_epoch_ground_truths
-
-import plotly.graph_objects as go
+    return average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list, last_epoch_predictions, last_epoch_ground_truths
 
 def plot_losses(total_loss_list, command_loss_list, parameter_loss_list, num_epochs):
     """
@@ -200,13 +212,13 @@ def plot_losses(total_loss_list, command_loss_list, parameter_loss_list, num_epo
     )
     fig.show()
 
-def plot_batch_losses(total_loss_list, command_loss_list, parameter_loss_list):
+def plot_average_losses(total_loss_list, command_loss_list, parameter_loss_list):
     """
-    Plot the losses over the course of training for each batch.
+    Plot the average losses per epoch.
 
-    :param total_loss_list: The total loss list (can be a list of tensors or numpy arrays)
-    :param command_loss_list: The command loss list (can be a list of tensors or numpy arrays)
-    :param parameter_loss_list: The parameter loss list (can be a list of tensors or numpy arrays)
+    :param total_loss_list: The average total loss list (a list of floats)
+    :param command_loss_list: The average command loss list (a list of floats)
+    :param parameter_loss_list: The average parameter loss list (a list of floats)
     """
     def ensure_list(data):
         if isinstance(data[0], torch.Tensor):
@@ -217,7 +229,6 @@ def plot_batch_losses(total_loss_list, command_loss_list, parameter_loss_list):
     command_loss_list = ensure_list(command_loss_list)
     parameter_loss_list = ensure_list(parameter_loss_list)
 
-    # Use the full range of accumulated losses for the x-axis (each batch is one step)
     x_values = list(range(1, len(total_loss_list) + 1))
 
     fig = go.Figure()
@@ -225,14 +236,12 @@ def plot_batch_losses(total_loss_list, command_loss_list, parameter_loss_list):
     fig.add_trace(go.Scatter(x=x_values, y=command_loss_list, mode='lines', name='Command Loss', line=dict(color='green')))
     fig.add_trace(go.Scatter(x=x_values, y=parameter_loss_list, mode='lines', name='Parameter Loss', line=dict(color='red')))
     fig.update_layout(
-        title='Training Loss over Batches',
-        xaxis_title='Batch Index',
+        title='Average Training Loss over Epochs',
+        xaxis_title='Epoch',
         yaxis_title='Loss',
         hovermode='x',
     )
     fig.show()
-
-
 
 def print_last_epoch_results(last_epoch_predictions, last_epoch_ground_truths):
     """

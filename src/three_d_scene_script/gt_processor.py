@@ -43,10 +43,7 @@ class SceneScriptProcessor:
             tensor = torch.tensor(self.normalize_dataframe(df).values, dtype=torch.float32)
 
             if tensor.numel() == 0:
-                print(f"Skipping empty tensor for {['walls', 'doors', 'windows'][i]}")
                 continue
-
-            print(f"{['Wall', 'Door', 'Window'][i]} tensor shape: {tensor.shape}")
             tensors.append(tensor)
 
         if tensors:
