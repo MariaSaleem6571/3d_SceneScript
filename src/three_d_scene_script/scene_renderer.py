@@ -2,7 +2,6 @@ import open3d as o3d
 import numpy as np
 import pandas as pd
 
-# Function to create a LineSet for visualization
 def create_lineset_from_box(min_bound, max_bound, color=[0, 0, 0]):
     points = [
         [min_bound[0], min_bound[1], min_bound[2]], [max_bound[0], min_bound[1], min_bound[2]],
@@ -22,7 +21,6 @@ def create_lineset_from_box(min_bound, max_bound, color=[0, 0, 0]):
     line_set.colors = o3d.utility.Vector3dVector(colors)
     return line_set
 
-# Define the function to create a wall
 def make_wall(xcenter, ycenter, theta, width, height):
     min_bound = [-width / 2, -0.05, 0]
     max_bound = [width / 2, 0.05, height]
@@ -32,7 +30,6 @@ def make_wall(xcenter, ycenter, theta, width, height):
     wall.translate([xcenter, ycenter, height / 2])
     return wall
 
-# Define the function to create a door
 def make_door(position_x, position_y, position_z, width, height, rotation):
     min_bound = [-width / 2, -0.05, 0]
     max_bound = [width / 2, 0.05, height]
@@ -42,7 +39,6 @@ def make_door(position_x, position_y, position_z, width, height, rotation):
     door.translate([position_x, position_y, position_z])
     return door
 
-# Define the function to create a window
 def make_window(position_x, position_y, position_z, width, height, rotation):
     min_bound = [-width / 2, -0.05, 0]
     max_bound = [width / 2, 0.05, height]
@@ -70,7 +66,7 @@ doors_df = pd.DataFrame({
     'position_z': [1.011814, 0.993711, 0.983353],
     'width': [1.820626, 1.690708, 1.788263],
     'height': [2.023629, 1.987422, 1.966706],
-    'rotation': [0.0, -90.0, -90.0]  # Assuming rotation for doors as well
+    'rotation': [0.0, -90.0, -90.0]
 })
 
 # Windows data
@@ -81,26 +77,21 @@ windows_df = pd.DataFrame({
     'position_z': [1.644804, 1.375980, 2.249849, 1.696074],
     'width': [1.007971, 2.342133, 1.034733, 3.890121],
     'height': [2.118911, 2.336972, 1.210511, 2.829068],
-    'rotation': [0.0, 90.0, 180.0, 90.0]  # Assuming rotation for windows as well
+    'rotation': [0.0, 90.0, 180.0, 90.0]
 })
 
-# Create the walls
 walls = []
 for index, row in walls_df.iterrows():
     walls.append(make_wall(row['xcenter'], row['ycenter'], row['theta'], row['width'], row['height']))
 
-# Create the doors
 doors = []
 for index, row in doors_df.iterrows():
     doors.append(make_door(row['position_x'], row['position_y'], row['position_z'], row['width'], row['height'], row['rotation']))
 
-# Create the windows
 windows = []
 for index, row in windows_df.iterrows():
     windows.append(make_window(row['position_x'], row['position_y'], row['position_z'], row['width'], row['height'], row['rotation']))
 
-# Combine all objects into a single scene
 scene = walls + doors + windows
 
-# Visualize the scene
 o3d.visualization.draw_geometries(scene)

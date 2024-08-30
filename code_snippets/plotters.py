@@ -29,7 +29,7 @@ PLOTTING_COLORS = {
 }
 
 
-# This function plots a wire frame for each language entity bounding box loaded from lang
+# This function plot a wire frame for each language entity bounding box loaded from lang
 def plot_box_wireframe(box):
     box_verts = UNIT_CUBE_VERTICES * box["scale"]
     box_verts = (box["rotation"] @ box_verts.T).T

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import torch
 from enum import Enum
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 
 class Commands(Enum):
     START = 1
@@ -27,11 +27,27 @@ class Commands(Enum):
 
 class SceneScriptProcessor:
     def __init__(self, file_path: str):
-        self.file_path = file_path
-
-    def process(self):
         """
-        Reads, normalizes, and converts script data into embeddings.
+        Initializes the SceneScriptProcessor.
+
+        Args:
+            file_path (str): Path to the script file.
+        """
+        self.file_path = file_path
+        self.normalize = False
+
+    def set_normalization(self, normalize: bool):
+        """
+        Sets the normalization flag.
+
+        Args:
+            normalize (bool): Whether to normalize the dataframes or not.
+        """
+        self.normalize = normalize
+
+    def process(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Reads, normalizes (if specified), and converts script data into embeddings.
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Decoder input and ground truth output embeddings.
@@ -40,7 +56,9 @@ class SceneScriptProcessor:
         tensors = []
 
         for i, df in enumerate(dataframes):
-            tensor = torch.tensor(self.normalize_dataframe(df).values, dtype=torch.float32)
+            if self.normalize:
+                df = self.normalize_dataframe(df)
+            tensor = torch.tensor(df.values, dtype=torch.float32)
 
             if tensor.numel() == 0:
                 continue
@@ -57,7 +75,6 @@ class SceneScriptProcessor:
             self.prepare_decoder_input_embeddings(self.generate_start_embedding(num_parameters), all_data),
             self.prepare_gt_output_embeddings(all_data, self.generate_stop_embedding(num_parameters))
         )
-
 
     def prepare_decoder_input_embeddings(self, start_tensor: torch.Tensor, sequence_data: torch.Tensor) -> torch.Tensor:
         """

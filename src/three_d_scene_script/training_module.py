@@ -18,8 +18,7 @@ def initialize_models():
     model = CommandTransformer(d_model=512, num_layers=6).to(device)
     return encoder_model, model
 
-
-def prepare_data(encoder_model, pt_cloud_path, scene_script_path):
+def prepare_data(encoder_model, pt_cloud_path, scene_script_path, normalize=True):
     """
     Prepare the data for training
 
@@ -33,6 +32,7 @@ def prepare_data(encoder_model, pt_cloud_path, scene_script_path):
     sparse_tensor = encoder_model.process_point_cloud(points, dist_std)
     pt_cloud_encoded_features = encoder_model(sparse_tensor).to(device)
     processor = SceneScriptProcessor(scene_script_path)
+    processor.set_normalization(normalize)
     decoder_input_embeddings, gt_output_embeddings = processor.process()
     return pt_cloud_encoded_features, decoder_input_embeddings.to(device), gt_output_embeddings.to(device)
 
@@ -212,13 +212,14 @@ def plot_losses(total_loss_list, command_loss_list, parameter_loss_list, num_epo
     )
     fig.show()
 
-def plot_average_losses(total_loss_list, command_loss_list, parameter_loss_list):
+def plot_average_losses(total_loss_list, command_loss_list, parameter_loss_list, save_path=None):
     """
-    Plot the average losses per epoch.
+    Plot the average losses per epoch and save the plot to a file.
 
     :param total_loss_list: The average total loss list (a list of floats)
     :param command_loss_list: The average command loss list (a list of floats)
     :param parameter_loss_list: The average parameter loss list (a list of floats)
+    :param save_path: Optional path to save the plot (including filename).
     """
     def ensure_list(data):
         if isinstance(data[0], torch.Tensor):
@@ -241,8 +242,12 @@ def plot_average_losses(total_loss_list, command_loss_list, parameter_loss_list)
         yaxis_title='Loss',
         hovermode='x',
     )
-    fig.show()
 
+    if save_path:
+        fig.write_image(save_path)
+        print(f"Plot saved at {save_path}")
+
+    fig.show()
 def print_last_epoch_results(last_epoch_predictions, last_epoch_ground_truths):
     """
     Print the last epoch results

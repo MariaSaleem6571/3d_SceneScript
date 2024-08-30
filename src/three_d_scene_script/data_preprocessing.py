@@ -2,6 +2,16 @@ import os
 from torch.utils.data import Dataset
 
 class PointCloudDataset(Dataset):
+    """
+    Dataset class for the point cloud data.
+
+    Args:
+        root_dir (str): The root directory containing the dataset
+
+    Returns:
+        point_cloud_path, script_path
+    """
+
     def __init__(self, root_dir):
         self.root_dir = root_dir
         self.files = []

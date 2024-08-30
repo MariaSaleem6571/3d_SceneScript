@@ -9,15 +9,40 @@ import torchsparse.nn as spnn
 from torchsparse import SparseTensor
 
 class PointCloudTransformerLayer(nn.Module):
+    """
+    Point Cloud Transformer Layer
+
+    Args:
+        voxel_size (float): The voxel size for the point cloud
+        emb_dim (int): The embedding dimension
+
+    Returns:
+        encoded_features_with_pos
+    """
+
     def __init__(self, voxel_size=0.03, emb_dim=512):
         super(PointCloudTransformerLayer, self).__init__()
         self.voxel_size = voxel_size
         self.emb_dim = emb_dim
-        
+
         self.sparse_encoder = SparseResNetEncoder()
+
+    def set_voxel_size(self, new_voxel_size):
+        """Set a new voxel size dynamically."""
+        self.voxel_size = new_voxel_size
 
     @classmethod
     def read_points_file(cls, filepath):
+        """
+        Read the point cloud file
+
+        Args:
+            filepath (str): The path to the point cloud file
+
+        Returns:
+            point_cloud, dist_std
+        """
+
         assert os.path.exists(filepath), f"Could not find point cloud file: {filepath}"
         df = pd.read_csv(filepath, compression="gzip")
         point_cloud = df[["px_world", "py_world", "pz_world"]]
@@ -25,10 +50,21 @@ class PointCloudTransformerLayer(nn.Module):
         return point_cloud.to_numpy(), dist_std.to_numpy()
 
     def generate_sinusoidal_positional_encoding(self, coordinates, d_model):
+        """
+        Generate sinusoidal positional encoding
+
+        Args:
+            coordinates (np.ndarray): The coordinates
+            d_model (int): The model dimension
+
+        Returns:
+            pe
+        """
         n_positions, n_dims = coordinates.shape
         pe = torch.zeros(n_positions, d_model, device='cuda')
         position = coordinates.float().cuda()
-        div_term = torch.exp(torch.arange(0, d_model // n_dims, 2).float() * -(np.log(10000.0) / (d_model // n_dims))).cuda()
+        div_term = torch.exp(
+            torch.arange(0, d_model // n_dims, 2).float() * -(np.log(10000.0) / (d_model // n_dims))).cuda()
 
         for i in range(n_dims):
             pe[:, 2 * i:d_model:2 * n_dims] = torch.sin(position[:, i].unsqueeze(1) * div_term)
@@ -37,6 +73,17 @@ class PointCloudTransformerLayer(nn.Module):
         return pe
 
     def process_point_cloud(self, points, dist_std):
+        """
+        Process the point cloud
+
+        Args:
+            points (np.ndarray): The points
+            dist_std (np.ndarray): The distance standard deviation
+
+        Returns:
+            sparse_tensor
+        """
+
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
         voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, self.voxel_size)
@@ -66,12 +113,19 @@ class PointCloudTransformerLayer(nn.Module):
         return sparse_tensor
 
     def forward(self, sparse_tensor):
+        """
+        Forward pass
+
+        Args:
+            sparse_tensor: The sparse tensor
+
+        Returns:
+            encoded_features_with_pos
+        """
+
         encoded_features = self.sparse_encoder(sparse_tensor)
-        
         positional_encoding = self.generate_sinusoidal_positional_encoding(encoded_features.C, self.emb_dim)
-        
         encoded_features_with_pos = encoded_features.F + positional_encoding
-        
         return encoded_features_with_pos
 
 class SparseResNetEncoder(nn.Module):
@@ -91,4 +145,3 @@ class SparseResNetEncoder(nn.Module):
         x = self.conv4(x)
         x = self.conv5(x)
         return x
-
