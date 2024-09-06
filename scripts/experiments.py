@@ -31,7 +31,7 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
     os.makedirs(plot_save_dir, exist_ok=True)
 
     dataset = PointCloudDataset(root_dir=root_dir)
-    subset_indices = list(range(24))
+    subset_indices = list(range(10))
     limited_dataset = Subset(dataset, subset_indices)
 
     dataloader = DataLoader(limited_dataset, batch_size=batch_size, shuffle=True)
@@ -73,7 +73,7 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
             average_epoch_command_loss_list.append(accumulated_command_loss / batch_count)
             average_epoch_parameter_loss_list.append(accumulated_parameter_loss / batch_count)
 
-            if (epoch + 1) % 5 == 0:
+            if (epoch + 1) % 25 == 0:
                 model_save_path = os.path.join(experiment_save_dir, f"{experiment_name}_epoch_{epoch + 1}.pth")
                 torch.save(model.state_dict(), model_save_path)
                 print(f"Model saved at {model_save_path}")
@@ -86,9 +86,9 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
     plot_average_losses(average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list, save_path=plot_save_path)
 
 def main():
-    root_dir = '/home/mseleem/Desktop/projectaria_sandbox/projectaria_tools_ase_data/train'
-    base_save_dir = os.path.abspath(os.path.join(os.getcwd(), '..', 'model_checkpoints'))
-    plot_save_dir = os.path.abspath(os.path.join(os.getcwd(), '..', 'plot'))
+    root_dir = '../projectaria_tools_ase_data/train'
+    base_save_dir = os.path.abspath(os.path.join(os.getcwd(), 'model_checkpoints'))
+    plot_save_dir = os.path.abspath(os.path.join(os.getcwd(), 'plot'))
 
     os.makedirs(base_save_dir, exist_ok=True)
     os.makedirs(plot_save_dir, exist_ok=True)

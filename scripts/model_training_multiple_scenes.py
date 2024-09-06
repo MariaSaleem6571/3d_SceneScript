@@ -17,7 +17,7 @@ save_dir = os.path.join(base_dir, 'model_checkpoints')
 os.makedirs(save_dir, exist_ok=True)
 
 dataset = PointCloudDataset(root_dir=root_dir)
-limited_dataset = torch.utils.data.Subset(dataset, list(range(80)))
+limited_dataset = torch.utils.data.Subset(dataset, list(range(40)))
 dataloader = DataLoader(limited_dataset, batch_size=8, shuffle=True)
 
 encoder_model, model = initialize_models()

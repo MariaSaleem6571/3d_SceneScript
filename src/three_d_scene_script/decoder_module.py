@@ -60,8 +60,10 @@ class TransformerOutputLayer(nn.Module):
         command_logits[..., 0] = -float('inf')
 
         command_probs = F.softmax(command_logits, dim=-1)
+        #command_probs = command_logits
         parameter_logits = self.param_layer(x)
         parameters_probs = torch.tanh(parameter_logits)
+        #parameters_probs = parameter_logits
         return command_probs, parameters_probs
 
 class PositionalEncoding(nn.Module):
@@ -174,7 +176,6 @@ class CustomTransformerDecoder(nn.Module):
     def __init__(self, d_model, d_out_kq, d_out_v, num_decoder_layers, dim_feedforward):
         """
         Initialize the custom transformer decoder
-
         :param d_model: The model dimension
         :param d_out_kq: The output dimension for key and query
         :param d_out_v: The output dimension for value
@@ -234,6 +235,9 @@ class CommandTransformer(nn.Module):
         self.input_dim = None
         self.d_model = d_model
         self.transformer = CustomTransformerDecoder(d_model, d_model, d_model, num_layers, 2048).to(device)
+
+        self.fc1 = nn.Linear(d_model, d_model).to(device)
+
         self.final_linear = None
 
     def set_input_dim(self, input_dim):
@@ -261,7 +265,11 @@ class CommandTransformer(nn.Module):
         tgt_emb = self.initial_linear(tgt).to(device)
         tgt_emb = self.pos_encoder(tgt_emb)
         transformer_output = self.transformer(tgt_emb, src_emb, tgt_mask=tgt_mask)
+
+        x = F.relu(self.fc1(transformer_output))
+
         final_output = self.final_linear(transformer_output)
+
         return final_output
 
 def generate_square_subsequent_mask(sz):
