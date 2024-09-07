@@ -6,7 +6,6 @@ from three_d_scene_script.data_preprocessing import PointCloudDataset
 from three_d_scene_script.training_module import (
     initialize_models,
     prepare_data,
-    configure_model,
     initialize_optimizers,
     process_epoch,
     plot_average_losses

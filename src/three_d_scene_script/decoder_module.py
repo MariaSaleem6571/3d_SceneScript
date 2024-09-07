@@ -228,46 +228,39 @@ class CommandTransformer(nn.Module):
         :param d_model: The model dimension
         :param num_layers: The number of layers
         """
-
         super(CommandTransformer, self).__init__()
-        self.point_cloud_encoder = PointCloudTransformerLayer().to(device)
         self.pos_encoder = PositionalEncoding(d_model).to(device)
-        self.input_dim = None
         self.d_model = d_model
         self.transformer = CustomTransformerDecoder(d_model, d_model, d_model, num_layers, 2048).to(device)
-
         self.fc1 = nn.Linear(d_model, d_model).to(device)
-
+        self.initial_linear = None
         self.final_linear = None
 
     def set_input_dim(self, input_dim):
-        """"
-        Set the input dimension
+        """
+        Set the input dimension and initialize required layers
 
         :param input_dim: The input dimension
         """
-        self.input_dim = input_dim
-        self.initial_linear = nn.Linear(self.input_dim, self.d_model).to(device)
-        self.output_layer = TransformerOutputLayer(self.d_model).cuda()
-        self.final_linear = nn.Linear(self.d_model, self.input_dim).to(device)
+        self.initial_linear = nn.Linear(input_dim, self.d_model).to(device)
+        self.output_layer = TransformerOutputLayer(self.d_model).to(device)
+        self.final_linear = nn.Linear(self.d_model, input_dim).to(device)
 
     def forward(self, src: torch.Tensor, tgt: torch.Tensor, tgt_mask=None):
-        """"
+        """
         Forward pass
 
-        :param src: The source tensor
-        :param tgt: The target tensor
-        :param tgt_mask: The target mask
+        :param src: The source tensor (encoded point cloud)
+        :param tgt: The target tensor (input embeddings)
+        :param tgt_mask: The target mask for transformer
         :return: final_output
         """
-
         src_emb = src.to(device)
         tgt_emb = self.initial_linear(tgt).to(device)
         tgt_emb = self.pos_encoder(tgt_emb)
         transformer_output = self.transformer(tgt_emb, src_emb, tgt_mask=tgt_mask)
 
         x = F.relu(self.fc1(transformer_output))
-
         final_output = self.final_linear(transformer_output)
 
         return final_output
