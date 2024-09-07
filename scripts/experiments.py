@@ -13,7 +13,9 @@ from three_d_scene_script.training_module import (
 )
 from three_d_scene_script.experiment_config import experiments
 
-def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize, batch_size, num_epochs, experiment_name):
+
+def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize, batch_size, num_epochs,
+                   experiment_name):
     """
     Run a single experiment with the specified hyperparameters.
 
@@ -26,28 +28,14 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
     :param num_epochs: Number of epochs to train
     :param experiment_name: Name of the experiment (used for saving models and plot)
     """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = initialize_models(device)
     experiment_save_dir = os.path.join(base_save_dir, experiment_name)
     os.makedirs(experiment_save_dir, exist_ok=True)
     os.makedirs(plot_save_dir, exist_ok=True)
-
     dataset = PointCloudDataset(root_dir=root_dir)
-    subset_indices = list(range(20))
-    limited_dataset = Subset(dataset, subset_indices)
-    dataloader = DataLoader(limited_dataset, batch_size=batch_size, shuffle=True)
-
-    model = initialize_models()
-    model.encoder_model.set_voxel_size(voxel_size)
-
-    for point_cloud_paths, script_paths in dataloader:
-        pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings = prepare_data(
-            model, point_cloud_paths[0], script_paths[0], normalize=normalize
-        )
-        decoder_input_size = decoder_input_embeddings.size(-1)
-        model = configure_model(model, decoder_input_size)
-        break
-
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     optimizer, scheduler = initialize_optimizers(model)
-
     average_epoch_loss_list = []
     average_epoch_command_loss_list = []
     average_epoch_parameter_loss_list = []
@@ -61,37 +49,47 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
             batch_count = 0
 
             for point_cloud_paths, script_paths in dataloader:
-                for point_cloud_path, script_path in zip(point_cloud_paths, script_paths):
-                    pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings = prepare_data(
-                        model, point_cloud_path, script_path, normalize=normalize
-                    )
+                sparse_tensor, decoder_input_embeddings, gt_output_embeddings = prepare_data(
+                    model, point_cloud_paths[0], script_paths[0], normalize=normalize
+                )
+
+                if epoch == 0 and batch_count == 0:
+                    model.set_input_dim(decoder_input_embeddings.size(-1))
 
                 batch_total_loss, batch_command_loss, batch_parameter_loss, _, _ = process_epoch(
-                    epoch, num_epochs, model, optimizer, scheduler, pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings
+                    epoch, num_epochs, model, optimizer, scheduler, sparse_tensor, decoder_input_embeddings,
+                    gt_output_embeddings
                 )
+
                 batch_count += 1
                 accumulated_loss += batch_total_loss.item()
                 accumulated_command_loss += batch_command_loss
                 accumulated_parameter_loss += batch_parameter_loss
 
-                print(f"Epoch {epoch + 1}, Batch {batch_count}, Batch Total Loss: {batch_total_loss.item()}, "
-                      f"Command Loss: {batch_command_loss}, Parameter Loss: {batch_parameter_loss}")
+                print(f"Epoch {epoch + 1}, Batch {batch_count}, "
+                      f"Total Loss: {batch_total_loss.item()}, Command Loss: {batch_command_loss}, "
+                      f"Parameter Loss: {batch_parameter_loss}")
 
             average_epoch_loss_list.append(accumulated_loss / batch_count)
             average_epoch_command_loss_list.append(accumulated_command_loss / batch_count)
             average_epoch_parameter_loss_list.append(accumulated_parameter_loss / batch_count)
+
+            print(f"Epoch {epoch + 1} complete. "
+                  f"Average Total Loss: {average_epoch_loss_list[-1]}, "
+                  f"Average Command Loss: {average_epoch_command_loss_list[-1]}, "
+                  f"Average Parameter Loss: {average_epoch_parameter_loss_list[-1]}\n")
 
             if (epoch + 1) % 25 == 0:
                 model_save_path = os.path.join(experiment_save_dir, f"{experiment_name}_epoch_{epoch + 1}.pth")
                 torch.save(model.state_dict(), model_save_path)
                 print(f"Model saved at {model_save_path}")
 
-            print(f"Experiment: {experiment_name} - Epoch {epoch + 1} complete. Average Total Loss: {average_epoch_loss_list[-1]}\n")
-
             epoch_pbar.update(1)
 
     plot_save_path = os.path.join(plot_save_dir, f"{experiment_name}_loss_plot.png")
-    plot_average_losses(average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list, save_path=plot_save_path)
+    plot_average_losses(average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list,
+                        save_path=plot_save_path)
+
 
 def main():
     root_dir = '../projectaria_tools_ase_data/train'
