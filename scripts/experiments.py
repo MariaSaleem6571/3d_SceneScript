@@ -31,13 +31,22 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
     os.makedirs(plot_save_dir, exist_ok=True)
 
     dataset = PointCloudDataset(root_dir=root_dir)
-    subset_indices = list(range(10))
+    subset_indices = list(range(20))
     limited_dataset = Subset(dataset, subset_indices)
-
     dataloader = DataLoader(limited_dataset, batch_size=batch_size, shuffle=True)
-    encoder_model, model = initialize_models()
-    encoder_model.set_voxel_size(voxel_size)
-    optimizer, scheduler = None, None
+
+    model = initialize_models()
+    model.encoder_model.set_voxel_size(voxel_size)
+
+    for point_cloud_paths, script_paths in dataloader:
+        pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings = prepare_data(
+            model, point_cloud_paths[0], script_paths[0], normalize=normalize
+        )
+        decoder_input_size = decoder_input_embeddings.size(-1)
+        model = configure_model(model, decoder_input_size)
+        break
+
+    optimizer, scheduler = initialize_optimizers(model)
 
     average_epoch_loss_list = []
     average_epoch_command_loss_list = []
@@ -54,11 +63,9 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
             for point_cloud_paths, script_paths in dataloader:
                 for point_cloud_path, script_path in zip(point_cloud_paths, script_paths):
                     pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings = prepare_data(
-                        encoder_model, point_cloud_path, script_path, normalize=normalize
+                        model, point_cloud_path, script_path, normalize=normalize
                     )
-                if optimizer is None and scheduler is None:
-                    model = configure_model(model, decoder_input_embeddings.size(-1))
-                    optimizer, scheduler = initialize_optimizers(model)
+
                 batch_total_loss, batch_command_loss, batch_parameter_loss, _, _ = process_epoch(
                     epoch, num_epochs, model, optimizer, scheduler, pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings
                 )
@@ -66,8 +73,9 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
                 accumulated_loss += batch_total_loss.item()
                 accumulated_command_loss += batch_command_loss
                 accumulated_parameter_loss += batch_parameter_loss
+
                 print(f"Epoch {epoch + 1}, Batch {batch_count}, Batch Total Loss: {batch_total_loss.item()}, "
-                        f"Command Loss: {batch_command_loss}, Parameter Loss: {batch_parameter_loss}")
+                      f"Command Loss: {batch_command_loss}, Parameter Loss: {batch_parameter_loss}")
 
             average_epoch_loss_list.append(accumulated_loss / batch_count)
             average_epoch_command_loss_list.append(accumulated_command_loss / batch_count)
@@ -107,3 +115,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

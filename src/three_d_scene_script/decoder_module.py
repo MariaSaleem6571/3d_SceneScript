@@ -59,8 +59,8 @@ class TransformerOutputLayer(nn.Module):
         command_logits = self.command_layer(x)
         command_logits[..., 0] = -float('inf')
 
-        command_probs = F.softmax(command_logits, dim=-1)
-        #command_probs = command_logits
+        #command_probs = F.softmax(command_logits, dim=-1)
+        command_probs = command_logits
         parameter_logits = self.param_layer(x)
         parameters_probs = torch.tanh(parameter_logits)
         #parameters_probs = parameter_logits

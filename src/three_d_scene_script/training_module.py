@@ -8,29 +8,48 @@ import plotly.graph_objects as go
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+class UnifiedModel(nn.Module):
+    def __init__(self, encoder_model, decoder_model):
+        super(UnifiedModel, self).__init__()
+        self.encoder_model = encoder_model
+        self.decoder_model = decoder_model
+
+    def forward(self, pt_cloud_encoded_features, decoder_input_embeddings, tgt_mask):
+        output = self.decoder_model(src=pt_cloud_encoded_features, tgt=decoder_input_embeddings, tgt_mask=tgt_mask)
+        return output
+
+    def encode(self, pt_cloud):
+        return self.encoder_model(pt_cloud)
+
+    def set_input_dim(self, input_dim):
+        """
+        Set input dimension for the decoder model.
+        """
+        self.decoder_model.set_input_dim(input_dim)
+
 def initialize_models():
     """
-    Initialize the encoder and decoder models
+    Initialize the encoder and decoder models and return the unified model.
 
-    :return: encoder_model, model
+    :return: unified_model
     """
     encoder_model = PointCloudTransformerLayer().to(device)
-    model = CommandTransformer(d_model=512, num_layers=6).to(device)
-    return encoder_model, model
+    decoder_model = CommandTransformer(d_model=512, num_layers=6).to(device)
+    unified_model = UnifiedModel(encoder_model, decoder_model)
+    return unified_model
 
-def prepare_data(encoder_model, pt_cloud_path, scene_script_path, normalize=True):
+def prepare_data(model, pt_cloud_path, scene_script_path, normalize=True):
     """
     Prepare the data for training
 
-    :param encoder_model: The encoder model
+    :param model: The unified model
     :param pt_cloud_path: The path to the point cloud file
     :param scene_script_path: The path to the scene script file
     :return: pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings
     """
-
-    points, dist_std = encoder_model.read_points_file(pt_cloud_path)
-    sparse_tensor = encoder_model.process_point_cloud(points, dist_std)
-    pt_cloud_encoded_features = encoder_model(sparse_tensor).to(device)
+    points, dist_std = model.encoder_model.read_points_file(pt_cloud_path)
+    sparse_tensor = model.encoder_model.process_point_cloud(points, dist_std)
+    pt_cloud_encoded_features = model.encode(sparse_tensor).to(device)
     processor = SceneScriptProcessor(scene_script_path)
     processor.set_normalization(normalize)
     decoder_input_embeddings, gt_output_embeddings = processor.process()
@@ -47,17 +66,18 @@ def configure_model(model, input_dim):
     model.set_input_dim(input_dim)
     return model
 
-def initialize_optimizers(model):
+def initialize_optimizers(model, lr=0.0001):
     """
-    Initialize the optimizer and scheduler
+    Initialize the optimizer and learning rate scheduler for the unified model.
 
-    :param model: The model to optimize
-    :return: optimizer, scheduler
+    :param model: The unified model containing encoder and decoder
+    :param lr: Learning rate for the optimizer
+    :return: Initialized optimizer and scheduler
     """
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     return optimizer, scheduler
+
 
 def calculate_losses(output, gt_output, command_dim, parameter_dim):
     """
@@ -86,11 +106,11 @@ def calculate_losses(output, gt_output, command_dim, parameter_dim):
 
 def process_epoch(epoch, num_epochs, model, optimizer, scheduler, pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings):
     """
-    Process an epoch
+    Process an epoch.
 
     :param epoch: The epoch number
     :param num_epochs: The total number of epochs
-    :param model: The model to train
+    :param model: The unified model
     :param optimizer: The optimizer
     :param scheduler: The scheduler
     :param pt_cloud_encoded_features: The point cloud encoded features
@@ -98,12 +118,11 @@ def process_epoch(epoch, num_epochs, model, optimizer, scheduler, pt_cloud_encod
     :param gt_output_embeddings: The ground truth output embeddings
     :return: total_loss, command_loss, parameter_loss, predictions, ground_truths
     """
-
     model.train()
     optimizer.zero_grad()
 
     tgt_mask = generate_square_subsequent_mask(decoder_input_embeddings.size(1)).to(device)
-    output = model(src=pt_cloud_encoded_features, tgt=decoder_input_embeddings, tgt_mask=tgt_mask)
+    output = model(pt_cloud_encoded_features, decoder_input_embeddings, tgt_mask)
 
     command_dim = len(Commands)
     parameter_dim = decoder_input_embeddings.size(-1) - command_dim
@@ -137,10 +156,10 @@ def extract_final_predictions(output, gt_output_embeddings, command_dim):
 
 def train_model(num_epochs, model, optimizer, scheduler, pt_cloud_encoded_features, decoder_input_embeddings, gt_output_embeddings):
     """
-    Train the model
+    Train the unified model
 
     :param num_epochs: The number of epochs
-    :param model: The model to train
+    :param model: The unified model to train
     :param optimizer: The optimizer
     :param scheduler: The scheduler
     :param pt_cloud_encoded_features: The point cloud encoded features
