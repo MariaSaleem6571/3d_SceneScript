@@ -12,7 +12,6 @@ from three_d_scene_script.training_module import (
 )
 from three_d_scene_script.experiment_config import experiments
 
-
 def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize, batch_size, num_epochs,
                    experiment_name):
     """
@@ -33,7 +32,11 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
     os.makedirs(experiment_save_dir, exist_ok=True)
     os.makedirs(plot_save_dir, exist_ok=True)
     dataset = PointCloudDataset(root_dir=root_dir)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    subset_indices = list(range(20))
+    subset_dataset = Subset(dataset, subset_indices)
+
+    dataloader = DataLoader(subset_dataset, batch_size=batch_size, shuffle=True)
     optimizer, scheduler = initialize_optimizers(model)
     average_epoch_loss_list = []
     average_epoch_command_loss_list = []
@@ -89,16 +92,16 @@ def run_experiment(root_dir, base_save_dir, plot_save_dir, voxel_size, normalize
     plot_average_losses(average_epoch_loss_list, average_epoch_command_loss_list, average_epoch_parameter_loss_list,
                         save_path=plot_save_path)
 
-
 def main():
     root_dir = '../projectaria_tools_ase_data/train'
-    base_save_dir = os.path.abspath(os.path.join(os.getcwd(), 'model_checkpoints'))
-    plot_save_dir = os.path.abspath(os.path.join(os.getcwd(), 'plot'))
+    base_save_dir = os.path.abspath(os.path.join(os.getcwd(), '../model_checkpoints'))
+    plot_save_dir = os.path.abspath(os.path.join(os.getcwd(), '../plot'))
 
     os.makedirs(base_save_dir, exist_ok=True)
     os.makedirs(plot_save_dir, exist_ok=True)
 
-    experiment = experiments[0]
+    experiment = experiments[1]
+
     run_experiment(
         root_dir=root_dir,
         base_save_dir=base_save_dir,
@@ -112,5 +115,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

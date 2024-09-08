@@ -67,34 +67,28 @@ class TransformerOutputLayer(nn.Module):
         return command_probs, parameters_probs
 
 class PositionalEncoding(nn.Module):
-
     def __init__(self, d_model, max_len=5000):
         """
-        Initialize the positional encoding
+        Initialize the positional encoding with trainable embeddings.
 
         :param d_model: The model dimension
         :param max_len: The maximum length
         """
-
         super(PositionalEncoding, self).__init__()
-        pe = torch.zeros(max_len, d_model).to(device)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1).to(device)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)).to(device)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(1)
-        self.register_buffer('pe', pe)
+        self.positional_embedding = nn.Embedding(max_len, d_model)
+        self.max_len = max_len
 
     def forward(self, x):
         """
         Forward pass
 
-        :param x: The input tensor
-        :return: x + self.pe[:x.size(0), :]
+        :param x: The input tensor (sequence of embeddings)
+        :return: x + positional embedding
         """
-
-        x = x + self.pe[:x.size(0), :]
-        return x
+        seq_len = x.size(1)
+        positions = torch.arange(0, seq_len, dtype=torch.long, device=x.device).unsqueeze(0)
+        position_embeddings = self.positional_embedding(positions)
+        return x + position_embeddings
 
 class CrossAttention(nn.Module):
 
@@ -221,7 +215,7 @@ def select_parameters(command_probs, parameters_probs):
 
 class CommandTransformer(nn.Module):
 
-    def __init__(self, d_model=512, num_layers=6):
+    def __init__(self, d_model=512, num_layers=6, max_len=5000):
         """
         Initialize the command transformer
 
@@ -229,7 +223,7 @@ class CommandTransformer(nn.Module):
         :param num_layers: The number of layers
         """
         super(CommandTransformer, self).__init__()
-        self.pos_encoder = PositionalEncoding(d_model).to(device)
+        self.pos_encoder = PositionalEncoding(d_model, max_len).to(device)
         self.d_model = d_model
         self.transformer = CustomTransformerDecoder(d_model, d_model, d_model, num_layers, 2048).to(device)
         self.fc1 = nn.Linear(d_model, d_model).to(device)

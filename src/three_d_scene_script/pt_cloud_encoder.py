@@ -20,12 +20,13 @@ class PointCloudTransformerLayer(nn.Module):
         encoded_features_with_pos
     """
 
-    def __init__(self, voxel_size=0.03, emb_dim=512):
+    def __init__(self, voxel_size=0.03, emb_dim=512, max_positions=7000):
         super(PointCloudTransformerLayer, self).__init__()
         self.voxel_size = voxel_size
         self.emb_dim = emb_dim
-
         self.sparse_encoder = SparseResNetEncoder()
+
+        self.positional_embeddings = nn.Embedding(max_positions, emb_dim).to('cuda')
 
     def set_voxel_size(self, new_voxel_size):
         """Set a new voxel size dynamically."""
@@ -49,28 +50,6 @@ class PointCloudTransformerLayer(nn.Module):
         dist_std = df["dist_std"]
         return point_cloud.to_numpy(), dist_std.to_numpy()
 
-    def generate_sinusoidal_positional_encoding(self, coordinates, d_model):
-        """
-        Generate sinusoidal positional encoding
-
-        Args:
-            coordinates (np.ndarray): The coordinates
-            d_model (int): The model dimension
-
-        Returns:
-            pe
-        """
-        n_positions, n_dims = coordinates.shape
-        pe = torch.zeros(n_positions, d_model, device='cuda')
-        position = coordinates.float().cuda()
-        div_term = torch.exp(
-            torch.arange(0, d_model // n_dims, 2).float() * -(np.log(10000.0) / (d_model // n_dims))).cuda()
-
-        for i in range(n_dims):
-            pe[:, 2 * i:d_model:2 * n_dims] = torch.sin(position[:, i].unsqueeze(1) * div_term)
-            pe[:, 2 * i + 1:d_model:2 * n_dims] = torch.cos(position[:, i].unsqueeze(1) * div_term)
-
-        return pe
 
     def process_point_cloud(self, points, dist_std):
         """
@@ -124,8 +103,10 @@ class PointCloudTransformerLayer(nn.Module):
         """
 
         encoded_features = self.sparse_encoder(sparse_tensor)
-        positional_encoding = self.generate_sinusoidal_positional_encoding(encoded_features.C, self.emb_dim)
-        encoded_features_with_pos = encoded_features.F + positional_encoding
+        positions = torch.arange(0, encoded_features.C.shape[0], device='cuda')
+        positional_encodings = self.positional_embeddings(positions)
+        encoded_features_with_pos = encoded_features.F + positional_encodings
+
         return encoded_features_with_pos
 
 class SparseResNetEncoder(nn.Module):
