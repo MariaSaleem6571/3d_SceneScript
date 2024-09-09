@@ -121,8 +121,10 @@ class CrossAttention(nn.Module):
         keys_2 = self.W_key(x_2)
         values_2 = self.W_value(x_2)
         attn_scores = queries_1.matmul(keys_2.transpose(-2, -1))
+
         if attn_mask is not None:
             attn_scores = attn_scores.masked_fill(attn_mask == float('-inf'), float('-inf'))
+            
         attn_weights = torch.softmax(attn_scores / self.d_out_kq ** 0.5, dim=-1)
         context_vec = attn_weights.matmul(values_2)
         return context_vec
@@ -148,7 +150,7 @@ class CustomTransformerDecoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model).to(device)
         self.norm3 = nn.LayerNorm(d_model).to(device)
 
-    def forward(self, tgt, memory, tgt_mask=None):
+    def forward(self, tgt, memory, tgt_mask=None, memory_mask=None):
         """
         Forward pass
 
@@ -160,7 +162,7 @@ class CustomTransformerDecoderLayer(nn.Module):
 
         tgt2, _ = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask)
         tgt = self.norm1(tgt + tgt2)
-        tgt2 = self.cross_attention(tgt, memory)
+        tgt2 = self.cross_attention(tgt, memory, attn_mask= memory_mask)
         tgt = self.norm2(tgt + tgt2)
         tgt2 = self.linear2(F.relu(self.linear1(tgt)))
         tgt = self.norm3(tgt + tgt2)
@@ -181,7 +183,7 @@ class CustomTransformerDecoder(nn.Module):
         self.layers = nn.ModuleList([
             CustomTransformerDecoderLayer(d_model, d_out_kq, d_out_v, dim_feedforward) for _ in range(num_decoder_layers)]).to(device)
 
-    def forward(self, tgt, memory, tgt_mask=None):
+    def forward(self, tgt, memory, tgt_mask=None, memory_mask=None):
         """
         Forward pass
 
@@ -192,7 +194,7 @@ class CustomTransformerDecoder(nn.Module):
         """
 
         for layer in self.layers:
-            tgt = layer(tgt, memory, tgt_mask=tgt_mask)
+            tgt = layer(tgt, memory, tgt_mask=tgt_mask, memory_mask= memory_mask)
         return tgt
 
 def select_parameters(command_probs, parameters_probs):
@@ -215,7 +217,7 @@ def select_parameters(command_probs, parameters_probs):
 
 class CommandTransformer(nn.Module):
 
-    def __init__(self, d_model=512, num_layers=6, max_len=5000):
+    def __init__(self, input_dim, d_model=512, num_layers=6, max_len=5000, dim_feedforward=2048):
         """
         Initialize the command transformer
 
@@ -223,22 +225,13 @@ class CommandTransformer(nn.Module):
         :param num_layers: The number of layers
         """
         super(CommandTransformer, self).__init__()
-        self.pos_encoder = PositionalEncoding(d_model, max_len).to(device)
         self.d_model = d_model
-        self.transformer = CustomTransformerDecoder(d_model, d_model, d_model, num_layers, 2048).to(device)
-        self.fc1 = nn.Linear(d_model, d_model).to(device)
-        self.initial_linear = None
-        self.final_linear = None
-
-    def set_input_dim(self, input_dim):
-        """
-        Set the input dimension and initialize required layers
-
-        :param input_dim: The input dimension
-        """
-        self.initial_linear = nn.Linear(input_dim, self.d_model).to(device)
-        self.output_layer = TransformerOutputLayer(self.d_model).to(device)
-        self.final_linear = nn.Linear(self.d_model, input_dim).to(device)
+        self.pos_encoder = PositionalEncoding(d_model, max_len)
+        self.transformer = CustomTransformerDecoder(d_model, d_model, d_model, num_layers, dim_feedforward)
+        self.output_layer = TransformerOutputLayer(d_model)
+        self.fc1 = nn.Linear(input_dim, d_model)
+        self.fc2 = nn.Linear(d_model, d_model)
+        self.fc3 = nn.Linear(d_model, input_dim)
 
     def forward(self, src: torch.Tensor, tgt: torch.Tensor, tgt_mask=None):
         """
@@ -250,12 +243,12 @@ class CommandTransformer(nn.Module):
         :return: final_output
         """
         src_emb = src.to(device)
-        tgt_emb = self.initial_linear(tgt).to(device)
+        tgt_emb = self.fc1(tgt)
         tgt_emb = self.pos_encoder(tgt_emb)
         transformer_output = self.transformer(tgt_emb, src_emb, tgt_mask=tgt_mask)
 
-        x = F.relu(self.fc1(transformer_output))
-        final_output = self.final_linear(transformer_output)
+        x = F.relu(self.fc2(transformer_output))
+        final_output = self.fc3(transformer_output)
 
         return final_output
 
