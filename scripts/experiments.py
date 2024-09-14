@@ -8,7 +8,6 @@ from three_d_scene_script.data_preprocessing import PointCloudDataset
 from three_d_scene_script.gt_processor import SceneScriptProcessor
 from three_d_scene_script.decoder_module import Commands, CommandTransformer, generate_square_subsequent_mask
 from three_d_scene_script.experiment_config import experiments
-from torchsparse import SparseTensor
 import torch.optim as optim
 import plotly.graph_objects as go
 
@@ -60,7 +59,6 @@ def train_model(root_dir, base_save_dir, plot_save_dir, batch_size, num_epochs, 
     :param normalize: Whether to normalize the data
     :param experiment_name: Name of the experiment
     """
-    # Print the experiment details
     print(f"Training experiment: {experiment_name}")
     print(f"  Voxel size: {voxel_size}")
     print(f"  Normalize: {normalize}")
@@ -74,7 +72,7 @@ def train_model(root_dir, base_save_dir, plot_save_dir, batch_size, num_epochs, 
     criterion_parameters = nn.MSELoss()
 
     dataset = PointCloudDataset(root_dir=root_dir)
-    subset_indices = list(range(1000))
+    subset_indices = list(range(5000))
     subset_dataset = Subset(dataset, subset_indices)
     dataloader = DataLoader(subset_dataset, batch_size=batch_size, shuffle=True)
 
@@ -134,7 +132,7 @@ def train_model(root_dir, base_save_dir, plot_save_dir, batch_size, num_epochs, 
             print(
                 f"Epoch {epoch + 1} completed. Avg Loss: {avg_epoch_loss[-1]}, Command Loss: {avg_command_loss[-1]}, Param Loss: {avg_parameter_loss[-1]}\n")
 
-            if (epoch + 1) % 50 == 0:
+            if (epoch + 1) % 100 == 0:
                 model_save_path = os.path.join(experiment_save_dir, f"{experiment_name}_epoch_{epoch + 1}.pth")
                 torch.save(model.state_dict(), model_save_path)
                 print(f"Model saved at {model_save_path}")
@@ -175,7 +173,7 @@ def main():
     os.makedirs(base_save_dir, exist_ok=True)
     os.makedirs(plot_save_dir, exist_ok=True)
 
-    experiment = experiments[3]
+    experiment = experiments[2]
 
     train_model(
         root_dir=root_dir,

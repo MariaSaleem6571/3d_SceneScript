@@ -87,7 +87,7 @@ def generate_script_autoregressively(model, point_cloud_sparse_tensor, max_len=2
 
     return generated_script
 
-def process_generated_script(predicted_script):
+def process_generated_script(predicted_script, output_file="generated_scene_script.txt"):
     script_lines = []
     wall_count = 0
     door_count = 1000
@@ -116,20 +116,26 @@ def process_generated_script(predicted_script):
             )
             window_count += 1
 
+    # Print the script lines to the console
     for line in script_lines:
         print(line)
 
+    # Save the script to a file
+    with open(output_file, "w") as f:
+        for line in script_lines:
+            f.write(line + "\n")
+    print(f"Script saved to {output_file}")
 
-def test_script_generation(point_cloud_path, model_path, max_len=100):
+def test_script_generation(point_cloud_path, model_path, max_len=100, output_file="generated_scene_script.txt"):
     model = UnifiedModel().to(device)
     model.load_state_dict(torch.load(model_path))
 
     point_cloud_sparse_tensor = prepare_point_cloud(point_cloud_path)
     predicted_script = generate_script_autoregressively(model, point_cloud_sparse_tensor, max_len)
-    process_generated_script(predicted_script)
+    process_generated_script(predicted_script, output_file)
 
 
 if __name__ == "__main__":
-    point_cloud_path = "/home/mseleem/3d_SceneScript/projectaria_tools_ase_data/test/279/semidense_points.csv.gz"
+    point_cloud_path = "/home/mseleem/3d_SceneScript/projectaria_tools_ase_data/test/5524/semidense_points.csv.gz"
     model_path = "/home/mseleem/Downloads/experiment_2_epoch_50.pth"
     test_script_generation(point_cloud_path, model_path)
