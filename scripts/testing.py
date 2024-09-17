@@ -25,7 +25,8 @@ def prepare_point_cloud(point_cloud_path):
     return sparse_tensor
 
 def convert_wall_prediction(parameters):
-    xcenter, ycenter, width, theta, height, thickness = parameters
+    # The parameters for walls: height, width, theta, xcenter, ycenter
+    height, width, theta, xcenter, ycenter = parameters
     a_x = xcenter - (width / 2) * np.cos(np.radians(theta))
     a_y = ycenter - (width / 2) * np.sin(np.radians(theta))
     b_x = xcenter + (width / 2) * np.cos(np.radians(theta))
@@ -37,27 +38,19 @@ def convert_wall_prediction(parameters):
         "b_x": b_x,
         "b_y": b_y,
         "b_z": 0.0,
-        "height": height,
-        "thickness": thickness
-    }
-
-def convert_door_window_prediction(parameters):
-    xcenter, ycenter, width, height, sill_height, theta = parameters
-    return {
-        "position_x": xcenter,
-        "position_y": ycenter,
-        "position_z": sill_height,
-        "width": width,
         "height": height
     }
 
-def convert_prediction(command, parameters):
-    if command == Commands.MAKE_WALL:
-        return convert_wall_prediction(parameters)
-    elif command in (Commands.MAKE_DOOR, Commands.MAKE_WINDOW):
-        return convert_door_window_prediction(parameters)
-    else:
-        return {}
+def convert_door_window_prediction(parameters):
+    # The parameters for doors/windows: pos_x, pos_y, pos_z, width, height
+    pos_x, pos_y, pos_z, width, height = parameters
+    return {
+        "position_x": pos_x,
+        "position_y": pos_y,
+        "position_z": pos_z,
+        "width": width,
+        "height": height
+    }
 
 def generate_script_autoregressively(model, point_cloud_sparse_tensor, max_len=200):
     model.eval()
@@ -77,44 +70,60 @@ def generate_script_autoregressively(model, point_cloud_sparse_tensor, max_len=2
             command = command_probs.argmax(dim=-1).item()
             predicted_parameters = parameters_probs.squeeze().cpu().numpy()
 
-            generated_script.append((Commands.get_name_for(command + 1), predicted_parameters))
-
+            # If the command is STOP, break the loop but do not add it to the script
             if command + 1 == Commands.STOP.value:
                 break
 
+            # Otherwise, append the command and parameters
+            generated_script.append((Commands.get_name_for(command + 1), predicted_parameters))
+
+            # Prepare the new input for the next iteration
             new_input = construct_embedding_vector_from_vocab(Commands.get_name_for(command + 1), parameters_probs)
             tgt_input = torch.cat([tgt_input, new_input.unsqueeze(0)], dim=1)
 
     return generated_script
 
 def process_generated_script(predicted_script, output_file="generated_scene_script.txt"):
-    script_lines = []
+    # Initialize counters for walls, doors, and windows
     wall_count = 0
     door_count = 1000
     window_count = 2000
 
+    # Store the script lines
+    script_lines = []
+
+    # Iterate over the predicted commands and parameters
     for step, (command, parameters) in enumerate(predicted_script):
+        # Remove the first column (the ID) from the parameters
+        parameters = parameters[1:]
+
+        # Assign IDs based on the command type and generate the script
         if command == Commands.MAKE_WALL:
+            obj_id = wall_count
+            wall_count += 1
             wall_data = convert_wall_prediction(parameters)
             script_lines.append(
-                f"make_wall, id={wall_count}, a_x={wall_data['a_x']}, a_y={wall_data['a_y']}, a_z=0.0, "
-                f"b_x={wall_data['b_x']}, b_y={wall_data['b_y']}, b_z=0.0, height={wall_data['height']}, thickness={wall_data['thickness']}"
+                f"make_wall, id={obj_id}, a_x={wall_data['a_x']}, a_y={wall_data['a_y']}, a_z=0.0, "
+                f"b_x={wall_data['b_x']}, b_y={wall_data['b_y']}, b_z=0.0, height={wall_data['height']}, thickness=0.0"
             )
-            wall_count += 1
+
         elif command == Commands.MAKE_DOOR:
+            obj_id = door_count
+            door_count += 1
             door_data = convert_door_window_prediction(parameters)
             script_lines.append(
-                f"make_door, id={door_count}, position_x={door_data['position_x']}, position_y={door_data['position_y']}, "
+                f"make_door, id={obj_id}, position_x={door_data['position_x']}, position_y={door_data['position_y']}, "
                 f"position_z={door_data['position_z']}, width={door_data['width']}, height={door_data['height']}"
             )
-            door_count += 1
+
         elif command == Commands.MAKE_WINDOW:
+            obj_id = window_count
+            window_count += 1
             window_data = convert_door_window_prediction(parameters)
             script_lines.append(
-                f"make_window, id={window_count}, position_x={window_data['position_x']}, position_y={window_data['position_y']}, "
+                f"make_window, id={obj_id}, position_x={window_data['position_x']}, position_y={window_data['position_y']}, "
                 f"position_z={window_data['position_z']}, width={window_data['width']}, height={window_data['height']}"
             )
-            window_count += 1
 
     # Print the script lines to the console
     for line in script_lines:
@@ -124,6 +133,7 @@ def process_generated_script(predicted_script, output_file="generated_scene_scri
     with open(output_file, "w") as f:
         for line in script_lines:
             f.write(line + "\n")
+
     print(f"Script saved to {output_file}")
 
 def test_script_generation(point_cloud_path, model_path, max_len=100, output_file="generated_scene_script.txt"):
@@ -136,6 +146,6 @@ def test_script_generation(point_cloud_path, model_path, max_len=100, output_fil
 
 
 if __name__ == "__main__":
-    point_cloud_path = "/home/mseleem/3d_SceneScript/projectaria_tools_ase_data/test/5524/semidense_points.csv.gz"
-    model_path = "/home/mseleem/Downloads/experiment_2_epoch_50.pth"
+    point_cloud_path = "/home/mseleem/3d_SceneScript/projectaria_tools_ase_data/train_1/0/semidense_points.csv.gz"
+    model_path = "/home/mseleem/3d_SceneScript/model_checkpoints/experiment_5/experiment_5_epoch_200.pth"
     test_script_generation(point_cloud_path, model_path)

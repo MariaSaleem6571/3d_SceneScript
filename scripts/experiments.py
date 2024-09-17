@@ -13,7 +13,6 @@ import plotly.graph_objects as go
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 def prepare_data(model, pt_cloud_path, scene_script_path, voxel_size, normalize):
     """
     Prepare the data for training.
@@ -67,12 +66,12 @@ def train_model(root_dir, base_save_dir, plot_save_dir, batch_size, num_epochs, 
 
     model = UnifiedModel().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
     criterion_command = nn.CrossEntropyLoss()
     criterion_parameters = nn.MSELoss()
 
     dataset = PointCloudDataset(root_dir=root_dir)
-    subset_indices = list(range(5000))
+    subset_indices = list(range(3000))
     subset_dataset = Subset(dataset, subset_indices)
     dataloader = DataLoader(subset_dataset, batch_size=batch_size, shuffle=True)
 
@@ -132,7 +131,7 @@ def train_model(root_dir, base_save_dir, plot_save_dir, batch_size, num_epochs, 
             print(
                 f"Epoch {epoch + 1} completed. Avg Loss: {avg_epoch_loss[-1]}, Command Loss: {avg_command_loss[-1]}, Param Loss: {avg_parameter_loss[-1]}\n")
 
-            if (epoch + 1) % 100 == 0:
+            if (epoch + 1) % 200 == 0:
                 model_save_path = os.path.join(experiment_save_dir, f"{experiment_name}_epoch_{epoch + 1}.pth")
                 torch.save(model.state_dict(), model_save_path)
                 print(f"Model saved at {model_save_path}")

@@ -203,5 +203,5 @@ def plot_3d_scene(language_path=None):
     )
     fig.show()
 
-file_path = "/home/mseleem/3d_SceneScript/projectaria_tools_ase_data/test/2005/ase_scene_language.txt"
+file_path = "/home/mseleem/3d_SceneScript/scripts/generated_scene_script.txt"
 plot_3d_scene(file_path)

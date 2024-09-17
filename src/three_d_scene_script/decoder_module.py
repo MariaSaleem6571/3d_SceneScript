@@ -61,8 +61,7 @@ class TransformerOutputLayer(nn.Module):
 
         command_probs = command_logits
         parameter_logits = self.param_layer(x)
-        #parameters_probs = torch.tanh(parameter_logits)
-        parameters_probs = parameter_logits
+        parameters_probs = torch.tanh(parameter_logits)
         return command_probs, parameters_probs
 
 class PositionalEncoding(nn.Module):

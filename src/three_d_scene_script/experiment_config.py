@@ -10,8 +10,8 @@ experiments = [
         'name': 'experiment_1',
         'voxel_size': 0.03,
         'normalize': True,
-        'batch_size': 16,
-        'num_epochs': 20
+        'batch_size': 1,
+        'num_epochs': 100
     },
     {
         'name': 'experiment_2',
@@ -24,7 +24,7 @@ experiments = [
         'name': 'experiment_3',
         'voxel_size': 0.04,
         'normalize': True,
-        'batch_size': 16,
+        'batch_size': 32,
         'num_epochs': 500
     },
     {
@@ -38,8 +38,8 @@ experiments = [
         'name': 'experiment_5',
         'voxel_size': 0.05,
         'normalize': True,
-        'batch_size': 16,
-        'num_epochs':20
+        'batch_size': 1,
+        'num_epochs':200
     },
     {
         'name': 'experiment_6',
