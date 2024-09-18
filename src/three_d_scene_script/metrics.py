@@ -1,3 +1,4 @@
+# metrics.py
 import numpy as np
 import cv2
 from skimage.metrics import structural_similarity as ssim
@@ -8,11 +9,33 @@ import torch
 import math
 
 def calculate_ssim(gt_image, output_image):
+    """
+    Calculate the Structural Similarity Index (SSIM) between the ground truth image and the output image.
+
+    Args:
+    gt_image (numpy.ndarray): The ground truth image.
+    output_image (numpy.ndarray): The output image.
+
+    Returns:
+    float: The SSIM value.
+    """
+
     ssim_value = ssim(gt_image, output_image, multichannel=True)
     print(f'SSIM: {ssim_value}')
     return ssim_value
 
 def calculate_psnr(gt_image, output_image):
+    """
+    Calculate the Peak Signal-to-Noise Ratio (PSNR) between the ground truth image and the output image.
+
+    Args:
+    gt_image (numpy.ndarray): The ground truth image.
+    output_image (numpy.ndarray): The output image.
+
+    Returns:
+    float: The PSNR value.
+    """
+
     mse_value = np.mean((gt_image - output_image) ** 2)
     if mse_value == 0:
         return 100
@@ -22,11 +45,33 @@ def calculate_psnr(gt_image, output_image):
     return psnr_value
 
 def calculate_mse(gt_image, output_image):
+    """
+    Calculate the Mean Squared Error (MSE) between the ground truth image and the output image.
+
+    Args:
+    gt_image (numpy.ndarray): The ground truth image.
+    output_image (numpy.ndarray): The output image.
+
+    Returns:
+    float: The MSE value.
+    """
+
     mse_value = mean_squared_error(gt_image.flatten(), output_image.flatten())
     print(f'MSE: {mse_value}')
     return mse_value
 
 def calculate_lpips(gt_image, output_image):
+    """
+    Calculate the Learned Perceptual Image Patch Similarity (LPIPS) between the ground truth image and the output image.
+
+    Args:
+    gt_image (numpy.ndarray): The ground truth image.
+    output_image (numpy.ndarray): The output image.
+
+    Returns:
+    float: The LPIPS value.
+    """
+
     lpips_model = LPIPS(net='vgg').cuda()
     gt_tensor = torch.from_numpy(gt_image).float().permute(2, 0, 1).unsqueeze(0).cuda() / 255.0
     output_tensor = torch.from_numpy(output_image).float().permute(2, 0, 1).unsqueeze(0).cuda() / 255.0
@@ -35,6 +80,17 @@ def calculate_lpips(gt_image, output_image):
     return lpips_value
 
 def calculate_euclidean_distance(gt_image, output_image):
+    """
+    Calculate the Euclidean Distance between the ground truth image and the output image.
+
+    Args:
+    gt_image (numpy.ndarray): The ground truth image.
+    output_image (numpy.ndarray): The output image.
+
+    Returns:
+    float: The Euclidean Distance.
+    """
+
     gt_image_flat = gt_image.flatten()
     output_image_flat = output_image.flatten()
     euclidean_dist = np.linalg.norm(gt_image_flat - output_image_flat)
@@ -42,6 +98,17 @@ def calculate_euclidean_distance(gt_image, output_image):
     return euclidean_dist
 
 def calculate_hungarian_matching(gt_image, output_image):
+    """
+    Calculate the Hungarian Matching Distance between the ground truth image and the output image.
+
+    Args:
+    gt_image (numpy.ndarray): The ground truth image.
+    output_image (numpy.ndarray): The output image.
+
+    Returns:
+    float: The Hungarian Matching Distance.
+    """
+
     height, width, _ = gt_image.shape
     cost_matrix = np.zeros((height * width, height * width))
 
@@ -58,10 +125,19 @@ def calculate_hungarian_matching(gt_image, output_image):
     return hungarian_distance
 
 def run_all_metrics(gt_image_path, output_image_path):
+    """
+    Run all the image quality metrics between the ground truth image and the output image.
+
+    Args:
+    gt_image_path (str): The file path to the ground truth image.
+    output_image_path (str): The file path to the output image.
+
+    Returns:
+    dict: A dictionary containing all the image quality metrics.
+    """
 
     gt_image = cv2.imread(gt_image_path)
     output_image = cv2.imread(output_image_path)
-
 
     gt_image_gray = cv2.cvtColor(gt_image, cv2.COLOR_BGR2GRAY)
     output_image_gray = cv2.cvtColor(output_image, cv2.COLOR_BGR2GRAY)
@@ -81,9 +157,3 @@ def run_all_metrics(gt_image_path, output_image_path):
         "Euclidean Distance": euclidean_distance,
         "Hungarian Matching Distance": hungarian_distance
     }
-
-gt_image_path = 'path_to_gt_image.png'
-output_image_path = 'path_to_output_image.png'
-results = run_all_metrics(gt_image_path, output_image_path)
-
-print(results)

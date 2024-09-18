@@ -42,7 +42,6 @@ def convert_wall_prediction(parameters):
     }
 
 def convert_door_window_prediction(parameters):
-    # The parameters for doors/windows: pos_x, pos_y, pos_z, width, height
     pos_x, pos_y, pos_z, width, height = parameters
     return {
         "position_x": pos_x,
@@ -69,35 +68,24 @@ def generate_script_autoregressively(model, point_cloud_sparse_tensor, max_len=2
             parameters_probs = output[:, -1, len(Commands):]
             command = command_probs.argmax(dim=-1).item()
             predicted_parameters = parameters_probs.squeeze().cpu().numpy()
-
-            # If the command is STOP, break the loop but do not add it to the script
             if command + 1 == Commands.STOP.value:
                 break
-
-            # Otherwise, append the command and parameters
             generated_script.append((Commands.get_name_for(command + 1), predicted_parameters))
-
-            # Prepare the new input for the next iteration
             new_input = construct_embedding_vector_from_vocab(Commands.get_name_for(command + 1), parameters_probs)
             tgt_input = torch.cat([tgt_input, new_input.unsqueeze(0)], dim=1)
 
     return generated_script
 
 def process_generated_script(predicted_script, output_file="generated_scene_script.txt"):
-    # Initialize counters for walls, doors, and windows
     wall_count = 0
     door_count = 1000
     window_count = 2000
 
-    # Store the script lines
     script_lines = []
 
-    # Iterate over the predicted commands and parameters
     for step, (command, parameters) in enumerate(predicted_script):
-        # Remove the first column (the ID) from the parameters
         parameters = parameters[1:]
 
-        # Assign IDs based on the command type and generate the script
         if command == Commands.MAKE_WALL:
             obj_id = wall_count
             wall_count += 1
@@ -125,11 +113,9 @@ def process_generated_script(predicted_script, output_file="generated_scene_scri
                 f"position_z={window_data['position_z']}, width={window_data['width']}, height={window_data['height']}"
             )
 
-    # Print the script lines to the console
     for line in script_lines:
         print(line)
 
-    # Save the script to a file
     with open(output_file, "w") as f:
         for line in script_lines:
             f.write(line + "\n")
@@ -146,6 +132,6 @@ def test_script_generation(point_cloud_path, model_path, max_len=100, output_fil
 
 
 if __name__ == "__main__":
-    point_cloud_path = "/home/mseleem/3d_SceneScript/projectaria_tools_ase_data/train_1/0/semidense_points.csv.gz"
+    point_cloud_path = "/home/mseleem/3d_SceneScript/0/semidense_points.csv.gz"
     model_path = "/home/mseleem/3d_SceneScript/model_checkpoints/experiment_5/experiment_5_epoch_200.pth"
     test_script_generation(point_cloud_path, model_path)
