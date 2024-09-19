@@ -1,48 +1,43 @@
 import json
 import numpy as np
-import plotly.graph_objs as go
+import plotly.graph_objects as go
 import os
 
-json_file_path = '/home/mseleem/3d_SceneScript/scripts/scene.json' 
-obj_directory = os.path.dirname(json_file_path)
+UNIT_CUBE_VERTICES = (
+    np.array([
+        (1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1),
+        (-1, 1, 1), (-1, 1, -1), (-1, -1, 1), (-1, -1, -1)
+    ]) * 0.5
+)
 
-with open(json_file_path, 'r') as file:
-    scene_data = json.load(file)
-
+UNIT_CUBE_FACES = np.array([
+    [0, 1, 3, 2], [4, 5, 7, 6],
+    [0, 2, 6, 4], [1, 3, 7, 5],
+    [0, 1, 5, 4], [2, 3, 7, 6]
+])
 PLOTTING_COLORS = {"wall": "#FBFAF5", "door": "#F7C59F", "window": "#53F4FF"}
 
-def parse_obj_file(obj_file_path):
+def load_json(json_file_path):
     """
-    Parses an OBJ file and extracts vertices and faces.
-    
-    Args:
-        obj_file_path: The path to the OBJ file.
-    
-    Returns:
-        vertices: List of vertices from the OBJ file.
-        faces: List of faces from the OBJ file (indices starting from 0).
+    Load JSON data containing mesh information.
     """
-    vertices = []
-    faces = []
-    with open(obj_file_path, 'r') as obj_file:
-        for line in obj_file:
-            if line.startswith('v '):
-                vertex = list(map(float, line.strip().split()[1:]))
-                vertices.append(vertex)
-            elif line.startswith('f '):
-                face = [int(i) - 1 for i in line.strip().split()[1:]]
-                faces.append(face)
-    
-    return np.array(vertices), np.array(faces)
+    with open(json_file_path, 'r') as file:
+        scene_data = json.load(file)
+    return scene_data
 
-def plot_obj_wireframe(vertices, faces, obj_class):
+def apply_pose(vertices, rotation_matrix, position):
     """
-    Returns a Plotly scatter trace for a wireframe object.
+    Apply the pose (rotation and translation) to the vertices.
+    """
+    rotated_vertices = np.dot(vertices, rotation_matrix.T)
+
+    transformed_vertices = rotated_vertices + position
     
-    Args:
-        vertices: List of vertices for the object.
-        faces: List of faces (index triples/quads).
-        obj_class: Class of the object (e.g., 'wall', 'door', 'window').
+    return transformed_vertices
+
+def plot_box_wireframe(vertices, faces, obj_class):
+    """
+    Returns a Plotly scatter trace for a wireframe box.
     """
     lines_x, lines_y, lines_z = [], [], []
     for face in faces:
@@ -50,41 +45,44 @@ def plot_obj_wireframe(vertices, faces, obj_class):
             lines_x.append(vertices[idx, 0])
             lines_y.append(vertices[idx, 1])
             lines_z.append(vertices[idx, 2])
-        lines_x.append(None)  
+        lines_x.append(None)
         lines_y.append(None)
         lines_z.append(None)
-    
     return go.Scatter3d(
         x=lines_x, y=lines_y, z=lines_z, mode="lines",
         line={"color": PLOTTING_COLORS[obj_class], "width": 5},
         name=obj_class
     )
 
-fig = go.Figure()
+def plot_3d_scene(json_data):
+    """
+    Plot the 3D scene using the data from the JSON file.
+    """
+    fig = go.Figure()
 
-for obj in scene_data:
-    obj_id = obj['id']  
-    obj_class = obj['class']
+    for obj in json_data:
+        obj_class = obj['class']
+        position = np.array(obj['pose']['position'])  
+        rotation_matrix = np.array(obj['pose']['rotation'])  
+        vertices = np.array(obj['vertices'])  
 
-    if obj_class == "wall" and obj_id.startswith("wallwall"):
-        obj_id = obj_id.replace("wallwall", "wall", 1)
+        transformed_vertices = apply_pose(vertices, rotation_matrix, position)
+
+        faces = UNIT_CUBE_FACES  
+        fig.add_trace(plot_box_wireframe(transformed_vertices, faces, obj_class))
+
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='X',
+            yaxis_title='Y',
+            zaxis_title='Z',
+            aspectmode="data"
+        ),
+        title="3D Scene from JSON Data"
+    )
     
-    obj_file = os.path.join(obj_directory, f'{obj_id}.obj')  
+    fig.show()
 
-    if os.path.exists(obj_file):
-        vertices, faces = parse_obj_file(obj_file)
-        fig.add_trace(plot_obj_wireframe(vertices, faces, obj_class))
-    else:
-        print(f"OBJ file not found for {obj_id}: {obj_file}")
-
-fig.update_layout(
-    scene=dict(
-        xaxis_title='X',
-        yaxis_title='Y',
-        zaxis_title='Z',
-        aspectmode="data"
-    ),
-    title='3D Mesh Scene'
-)
-
-fig.show()
+json_file_path = "/home/mseleem/3d_SceneScript/meshes/scene.json" 
+scene_data = load_json(json_file_path)
+plot_3d_scene(scene_data)

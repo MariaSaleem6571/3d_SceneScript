@@ -170,12 +170,15 @@ def language_to_bboxes(entities):
             wall_end = np.array([params["b_x"], params["b_y"], 0])
             length = np.linalg.norm(wall_start - wall_end)
             angle = calculate_angle_from_position(wall_start, wall_end)
+            print(f"Wall {wall['id']} angle: {np.degrees(angle)} degrees") 
             center = (wall_start + wall_end) * 0.5 + np.array([0, 0, 0.5 * params["height"]])
             scale = np.array([length, params["thickness"], params["height"]])
             rotation = z_rotation(angle)
+            print(f"Rotation Matrix for Wall {wall['id']}:\n{rotation}") 
+
 
             box_definitions.append({
-                "id": f"wall{wall['id']}",
+                "id": wall['id'],
                 "cmd": command,
                 "class": "wall",
                 "label": CLASS_LABELS["wall"],
@@ -204,6 +207,8 @@ def language_to_bboxes(entities):
             if not is_angle_within_threshold(angle, closest_angle):
                 print(f"Correcting angle for {command} at position {position} to match wall orientation.")
                 angle = closest_angle
+            else:
+                angle = calculate_angle_from_position(projected_position, projected_position + np.array([params["width"], 0]))
 
             thickness = 0.001
             center = np.array([projected_position[0], projected_position[1], params["position_z"]])
@@ -234,7 +239,9 @@ def plot_box_wireframe(box):
     """
 
     box_verts = UNIT_CUBE_VERTICES * box["scale"]
-    box_verts = (box["rotation"] @ box_verts.T).T + box["center"]
+    rotated_verts = (box["rotation"] @ box_verts.T).T
+    box_verts = rotated_verts + box["center"]
+    print(f"Vertices before rotation for Wall {box['id']}:\n{box_verts}")
     lines_x, lines_y, lines_z = [], [], []
 
     for pair in UNIT_CUBE_FACES:
