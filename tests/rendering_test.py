@@ -5,74 +5,77 @@ import os
 
 json_file_path = '/home/mseleem/3d_SceneScript/scripts/scene.json' 
 obj_directory = os.path.dirname(json_file_path)
+
 with open(json_file_path, 'r') as file:
     scene_data = json.load(file)
 
-UNIT_CUBE_VERTICES = (
-    np.array([
-        (1, 1, 1), (1, 1, -1), (1, -1, 1), (1, -1, -1),
-        (-1, 1, 1), (-1, 1, -1), (-1, -1, 1), (-1, -1, -1)
-    ]) * 0.5
-)
-
-UNIT_CUBE_FACES = np.array([
-    [0, 1, 3, 2], [4, 5, 7, 6],
-    [0, 2, 6, 4], [1, 3, 7, 5],
-    [0, 1, 5, 4], [2, 3, 7, 6]
-])
-
 PLOTTING_COLORS = {"wall": "#FBFAF5", "door": "#F7C59F", "window": "#53F4FF"}
 
-def plot_box_wireframe(box, box_class):
+def parse_obj_file(obj_file_path):
     """
-    Returns a Plotly scatter trace for a wireframe box.
-
+    Parses an OBJ file and extracts vertices and faces.
+    
     Args:
-        box: Dictionary with keys "center", "rotation", and "scale".
-        box_class: Class of the object (e.g., 'wall', 'door', 'window').
+        obj_file_path: The path to the OBJ file.
+    
+    Returns:
+        vertices: List of vertices from the OBJ file.
+        faces: List of faces from the OBJ file (indices starting from 0).
     """
+    vertices = []
+    faces = []
+    with open(obj_file_path, 'r') as obj_file:
+        for line in obj_file:
+            if line.startswith('v '):
+                vertex = list(map(float, line.strip().split()[1:]))
+                vertices.append(vertex)
+            elif line.startswith('f '):
+                face = [int(i) - 1 for i in line.strip().split()[1:]]
+                faces.append(face)
+    
+    return np.array(vertices), np.array(faces)
 
-
-    box_verts = UNIT_CUBE_VERTICES * box["scale"]
-    box_verts = (box["rotation"] @ box_verts.T).T + box["center"]
+def plot_obj_wireframe(vertices, faces, obj_class):
+    """
+    Returns a Plotly scatter trace for a wireframe object.
+    
+    Args:
+        vertices: List of vertices for the object.
+        faces: List of faces (index triples/quads).
+        obj_class: Class of the object (e.g., 'wall', 'door', 'window').
+    """
     lines_x, lines_y, lines_z = [], [], []
-    for face in UNIT_CUBE_FACES:
+    for face in faces:
         for idx in face:
-            lines_x.append(box_verts[idx, 0])
-            lines_y.append(box_verts[idx, 1])
-            lines_z.append(box_verts[idx, 2])
-        lines_x.append(None)
+            lines_x.append(vertices[idx, 0])
+            lines_y.append(vertices[idx, 1])
+            lines_z.append(vertices[idx, 2])
+        lines_x.append(None)  
         lines_y.append(None)
         lines_z.append(None)
-
+    
     return go.Scatter3d(
         x=lines_x, y=lines_y, z=lines_z, mode="lines",
-        line={"color": PLOTTING_COLORS[box_class], "width": 5},
-        name=box_class
+        line={"color": PLOTTING_COLORS[obj_class], "width": 5},
+        name=obj_class
     )
-
-# def z_rotation(angle):
-#     """Returns a 3x3 rotation matrix for rotation around the z-axis."""
-#     s = np.sin(angle)
-#     c = np.cos(angle)
-#     return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
 
 fig = go.Figure()
 
 for obj in scene_data:
-    box_id = obj['id']
-    box_class = obj['class']
-    position = np.array(obj['pose']['position'])
-    rotation_matrix = np.array(obj['pose']['rotation'])
-    scale = np.array(obj['scale'])
+    obj_id = obj['id']  
+    obj_class = obj['class']
 
-    box_definition = {
-        "center": position,
-        "rotation": rotation_matrix,
-        "scale": scale
-    }
+    if obj_class == "wall" and obj_id.startswith("wallwall"):
+        obj_id = obj_id.replace("wallwall", "wall", 1)
+    
+    obj_file = os.path.join(obj_directory, f'{obj_id}.obj')  
 
-    fig.add_trace(plot_box_wireframe(box_definition, box_class))
+    if os.path.exists(obj_file):
+        vertices, faces = parse_obj_file(obj_file)
+        fig.add_trace(plot_obj_wireframe(vertices, faces, obj_class))
+    else:
+        print(f"OBJ file not found for {obj_id}: {obj_file}")
 
 fig.update_layout(
     scene=dict(

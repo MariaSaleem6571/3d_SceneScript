@@ -29,15 +29,14 @@ def read_language_file(filepath):
 
 def export_mesh_to_obj(mesh, directory):
     """
-    Export a mesh to an OBJ file.
+    Export a mesh to an OBJ file with the scaling applied directly to the vertices, ensuring thin surfaces for walls, doors, and windows.
 
     Args:
     - mesh (dict): mesh data
     - directory (str): path to the output directory
 
     Returns:
-        - obj_file_name (str): name of the OBJ file
-
+    - obj_file_name (str): name of the OBJ file
     """
 
     numeric_id = ''.join(filter(str.isdigit, mesh['id']))
@@ -45,11 +44,15 @@ def export_mesh_to_obj(mesh, directory):
     obj_file_name = f"{mesh['class']}{numeric_id}.obj"
     obj_file_path = os.path.join(directory, obj_file_name)
 
-    box_verts = UNIT_CUBE_VERTICES * mesh["scale"]
-    box_verts = (mesh["rotation"] @ box_verts.T).T + mesh["center"]
+    thin_thickness = 0.001  
+    if mesh["class"] in {"wall", "door", "window"}:
+        mesh["scale"][1] = thin_thickness
+
+    scaled_vertices = UNIT_CUBE_VERTICES * mesh["scale"]
+    scaled_vertices = (mesh["rotation"] @ scaled_vertices.T).T + mesh["center"]
 
     with open(obj_file_path, "w") as obj_file:
-        for vertex in box_verts:
+        for vertex in scaled_vertices:
             obj_file.write(f"v {vertex[0]} {vertex[1]} {vertex[2]}\n")
         for face in UNIT_CUBE_FACES:
             face_indices = [str(i + 1) for i in face]
@@ -57,10 +60,9 @@ def export_mesh_to_obj(mesh, directory):
 
     return obj_file_name
 
-
 def export_scene_to_json(mesh_data, output_directory):
     """
-    Export a scene to a JSON file.
+    Export a scene to a JSON file with scaling applied directly to the vertices, ensuring thin surfaces for walls, doors, and windows.
 
     Args:
     - mesh_data (list): list of mesh data
@@ -68,13 +70,20 @@ def export_scene_to_json(mesh_data, output_directory):
 
     Returns:
     - json_file_path (str): path to the JSON file
-
     """
 
     scene_data = []
 
     for mesh in mesh_data:
+        thin_thickness = 0.001  
+        if mesh["class"] in {"wall", "door", "window"}:
+            mesh["scale"][1] = thin_thickness
+
+        scaled_vertices = UNIT_CUBE_VERTICES * mesh["scale"]
+        scaled_vertices = (mesh["rotation"] @ scaled_vertices.T).T + mesh["center"]
+
         obj_file_name = export_mesh_to_obj(mesh, output_directory)
+
         object_data = {
             "id": mesh["id"],
             "class": mesh["class"],
@@ -82,7 +91,7 @@ def export_scene_to_json(mesh_data, output_directory):
                 "position": mesh["center"].tolist(),
                 "rotation": mesh["rotation"].tolist()
             },
-            "scale": mesh["scale"].tolist(),
+            "vertices": scaled_vertices.tolist(),  
             "obj_file": obj_file_name
         }
         scene_data.append(object_data)
@@ -92,6 +101,8 @@ def export_scene_to_json(mesh_data, output_directory):
         json.dump(scene_data, json_file, indent=4)
 
     return json_file_path
+
+
 
 def create_zip_with_scene(output_directory, zip_output_path):
     """
@@ -161,7 +172,7 @@ def load_obj_file(obj_file_path):
 
 def load_scene_from_json_and_obj(json_file_path, obj_directory):
     """
-    Load a scene from a JSON file and OBJ files.
+    Load a scene from a JSON file and OBJ files without expecting a 'scale' field.
 
     Args:
     - json_file_path (str): path to the JSON file
@@ -169,7 +180,6 @@ def load_scene_from_json_and_obj(json_file_path, obj_directory):
 
     Returns:
     - mesh_data (list): list of mesh data
-
     """
 
     with open(json_file_path, "r") as json_file:
@@ -181,16 +191,18 @@ def load_scene_from_json_and_obj(json_file_path, obj_directory):
         obj_file_name = obj["obj_file"]
         obj_file_path = os.path.join(obj_directory, obj_file_name)
 
+        # Load vertices and faces from the OBJ file
         vertices, faces = load_obj_file(obj_file_path)
 
+        # Create mesh data without using 'scale'
         mesh_data.append({
             "id": obj["id"],
             "class": obj["class"],
-            "vertices": vertices,
+            "vertices": vertices,  # Use the already-scaled vertices
             "faces": faces,
             "center": np.array(obj["pose"]["position"]),
             "rotation": np.array(obj["pose"]["rotation"]),
-            "scale": np.array(obj["scale"])
+            # No 'scale' key since scaling has already been applied
         })
 
     return mesh_data
