@@ -310,6 +310,7 @@ def plot_3d_scene(mesh_data, title="3D Scene"):
         template="plotly_dark"
     )
     fig.show()
+    return fig
 
 def save_model_images(mesh_data, output_dir="images"):
     """
@@ -318,10 +319,10 @@ def save_model_images(mesh_data, output_dir="images"):
     camera_positions = {
         "top": {"x": 0, "y": 0, "z": 2},
         "bottom": {"x": 0, "y": 0, "z": -2},
-        "side1": {"x": 1, "y": 1, "z": 1.5},
-        "side2": {"x": -1, "y": -1, "z": 1.5},
-        "side3": {"x": 1, "y": -1, "z": 1.5},
-        "side4": {"x": -1, "y": 1, "z": 1.5},
+        "side1": {"x": 1.3, "y": 1.3, "z": 1.5},
+        "side2": {"x": -1.3, "y": -1.3, "z": 1.5},
+        "side3": {"x": 1.3, "y": -1.3, "z": 1.5},
+        "side4": {"x": -1.3, "y": 1.3, "z": 1.5},
     }
 
     if not os.path.exists(output_dir):

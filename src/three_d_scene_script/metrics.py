@@ -97,33 +97,6 @@ def calculate_euclidean_distance(gt_image, output_image):
     print(f'Euclidean Distance: {euclidean_dist}')
     return euclidean_dist
 
-def calculate_hungarian_matching(gt_image, output_image):
-    """
-    Calculate the Hungarian Matching Distance between the ground truth image and the output image.
-
-    Args:
-    gt_image (numpy.ndarray): The ground truth image.
-    output_image (numpy.ndarray): The output image.
-
-    Returns:
-    float: The Hungarian Matching Distance.
-    """
-
-    height, width, _ = gt_image.shape
-    cost_matrix = np.zeros((height * width, height * width))
-
-    for i in range(height):
-        for j in range(width):
-            gt_pixel = gt_image[i, j]
-            output_pixel = output_image[i, j]
-            diff = np.linalg.norm(gt_pixel - output_pixel)
-            cost_matrix[i * width + j] = diff
-
-    row_ind, col_ind = linear_sum_assignment(cost_matrix)
-    hungarian_distance = cost_matrix[row_ind, col_ind].sum()
-    print(f'Hungarian Matching Distance: {hungarian_distance}')
-    return hungarian_distance
-
 def run_all_metrics(gt_image_path, output_image_path):
     """
     Run all the image quality metrics between the ground truth image and the output image.
@@ -147,7 +120,6 @@ def run_all_metrics(gt_image_path, output_image_path):
     mse_value = calculate_mse(gt_image, output_image)
     lpips_value = calculate_lpips(gt_image, output_image)
     euclidean_distance = calculate_euclidean_distance(gt_image, output_image)
-    hungarian_distance = calculate_hungarian_matching(gt_image, output_image)
 
     return {
         "SSIM": ssim_value,
@@ -155,5 +127,4 @@ def run_all_metrics(gt_image_path, output_image_path):
         "MSE": mse_value,
         "LPIPS": lpips_value,
         "Euclidean Distance": euclidean_distance,
-        "Hungarian Matching Distance": hungarian_distance
     }
