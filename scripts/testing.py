@@ -132,6 +132,6 @@ def test_script_generation(point_cloud_path, model_path, max_len=100, output_fil
 
 
 if __name__ == "__main__":
-    point_cloud_path = "/home/mseleem/3d_SceneScript/0/semidense_points.csv.gz"
-    model_path = "/home/mseleem/3d_SceneScript/model_checkpoints/experiment_5/experiment_5_epoch_200.pth"
+    point_cloud_path = "/test/0/semidense_points.csv.gz"
+    model_path = "../model_checkpoints/experiment_5/experiment_5_epoch_200.pth"
     test_script_generation(point_cloud_path, model_path)
