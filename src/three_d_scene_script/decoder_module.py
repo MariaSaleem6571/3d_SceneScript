@@ -90,41 +90,54 @@ class PositionalEncoding(nn.Module):
 
 class CrossAttention(nn.Module):
 
-    def __init__(self, d_model, d_out_kq, d_out_v):
+    def __init__(self, d_model, d_out_kq, d_out_v, num_heads=6):
         """
-        Initialize the cross attention
+        Initialize the cross-attention with multiple heads.
 
-        :param d_model: The model dimension
-        :param d_out_kq: The output dimension for key and query
-        :param d_out_v: The output dimension for value
+        :param d_model: The model dimension.
+        :param d_out_kq: The output dimension for key and query.
+        :param d_out_v: The output dimension for value.
+        :param num_heads: Number of attention heads (default is 6).
         """
 
         super(CrossAttention, self).__init__()
-        self.d_out_kq = d_out_kq
+        assert d_out_kq % num_heads == 0 and d_out_v % num_heads == 0, "d_out_kq and d_out_v must be divisible by num_heads."
+
+        self.num_heads = num_heads
+        self.d_k = d_out_kq // num_heads
+        self.d_v = d_out_v // num_heads
+
         self.W_query = nn.Linear(d_model, d_out_kq).to(device)
         self.W_key = nn.Linear(d_model, d_out_kq).to(device)
         self.W_value = nn.Linear(d_model, d_out_v).to(device)
+        self.W_out = nn.Linear(d_out_v, d_model).to(device)
 
     def forward(self, x_1, x_2, attn_mask=None):
         """
-        Forward pass
+        Forward pass for multi-head cross-attention.
 
-        :param x_1: The first input tensor
-        :param x_2: The second input tensor
-        :param attn_mask: The attention mask
-        :return: context_vec
+        :param x_1: The first input tensor.
+        :param x_2: The second input tensor.
+        :param attn_mask: The attention mask (optional).
+        :return: The context vector.
         """
+        batch_size = x_1.size(0)
 
-        queries_1 = self.W_query(x_1)
-        keys_2 = self.W_key(x_2)
-        values_2 = self.W_value(x_2)
-        attn_scores = queries_1.matmul(keys_2.transpose(-2, -1))
+        queries = self.W_query(x_1).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        keys = self.W_key(x_2).view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
+        values = self.W_value(x_2).view(batch_size, -1, self.num_heads, self.d_v).transpose(1, 2)
+
+        attn_scores = torch.matmul(queries, keys.transpose(-2, -1)) / math.sqrt(self.d_k)
 
         if attn_mask is not None:
             attn_scores = attn_scores.masked_fill(attn_mask == float('-inf'), float('-inf'))
-            
-        attn_weights = torch.softmax(attn_scores / self.d_out_kq ** 0.5, dim=-1)
-        context_vec = attn_weights.matmul(values_2)
+
+        attn_weights = torch.softmax(attn_scores, dim=-1)
+
+        context = torch.matmul(attn_weights, values)
+        context = context.transpose(1, 2).contiguous().view(batch_size, -1, self.num_heads * self.d_v)
+
+        context_vec = self.W_out(context)
         return context_vec
 
 class CustomTransformerDecoderLayer(nn.Module):
@@ -140,8 +153,8 @@ class CustomTransformerDecoderLayer(nn.Module):
         """
 
         super(CustomTransformerDecoderLayer, self).__init__()
-        self.self_attn = nn.MultiheadAttention(d_model, num_heads=1, batch_first=True).to(device)
-        self.cross_attention = CrossAttention(d_model, d_out_kq, d_out_v).to(device)
+        self.self_attn = nn.MultiheadAttention(d_model, num_heads=6, batch_first=True).to(device)
+        self.cross_attention = CrossAttention(d_model, d_out_kq, d_out_v, num_heads=6).to(device)
         self.linear1 = nn.Linear(d_model, dim_feedforward).to(device)
         self.linear2 = nn.Linear(dim_feedforward, d_model).to(device)
         self.norm1 = nn.LayerNorm(d_model).to(device)

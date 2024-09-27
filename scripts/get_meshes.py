@@ -23,9 +23,3 @@ zip_output_path = os.path.join(meshes_dir, "scene_bundle.zip")
 if not os.path.exists(meshes_dir):
      os.makedirs(meshes_dir)
 process_scene_and_create_zip(language_path, meshes_dir, zip_output_path)
-
-entities = read_language_file(language_path)
-original_meshes = language_to_bboxes(entities)
-plot_3d_scene(original_meshes, title= "Generated Mesh")
-save_model_images(original_meshes, output_dir="../images_gt_0")
-

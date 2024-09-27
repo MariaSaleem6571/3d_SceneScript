@@ -35,6 +35,7 @@ class SceneScriptProcessor:
         """
         self.file_path = file_path
         self.normalize = False
+        self.scaling_factors = {}
 
     def set_normalization(self, normalize: bool):
         """
@@ -44,6 +45,26 @@ class SceneScriptProcessor:
             normalize (bool): Whether to normalize the dataframes or not.
         """
         self.normalize = normalize
+
+    def save_scaling_factors(self, column: str, min_val: float, max_val: float):
+        """
+        Save the scaling factors for a specific column.
+
+        Args:
+            column (str): Column name.
+            min_val (float): Minimum value of the column.
+            max_val (float): Maximum value of the column.
+        """
+        self.scaling_factors[column] = (min_val, max_val)
+
+    def get_scaling_factors(self) -> Dict[str, Tuple[float, float]]:
+        """
+        Returns the stored scaling factors.
+
+        Returns:
+            Dict[str, Tuple[float, float]]: A dictionary with column names as keys and (min, max) tuples as values.
+        """
+        return self.scaling_factors
 
     def process(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -158,6 +179,7 @@ class SceneScriptProcessor:
         numeric_columns = [col for col in df.select_dtypes(include=[np.number]).columns if not col.startswith('type')]
         for column in numeric_columns:
             min_val, max_val = df[column].min(), df[column].max()
+            self.save_scaling_factors(column, min_val, max_val)
             df[column] = 0 if min_val == max_val else (df[column] - min_val) / (max_val - min_val)
         return df
 

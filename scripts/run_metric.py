@@ -6,7 +6,6 @@ from three_d_scene_script.metrics import run_all_metrics
 
 def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file):
     """Process all scenes and compute metrics."""
-    # Create mappings from scene IDs to folder names
     gt_scene_map = {}
     for folder_name in os.listdir(gt_images_dir):
         if folder_name.endswith('_images'):
@@ -18,8 +17,6 @@ def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)
         if folder_name.startswith('generated_script_') and folder_name.endswith('_images'):
             scene_id = folder_name[len('generated_script_'):-len('_images')]
             gen_scene_map[scene_id] = folder_name
-
-    # Find common scene IDs
     scene_ids = sorted(set(gt_scene_map.keys()) & set(gen_scene_map.keys()))
 
     if not scene_ids:
@@ -37,11 +34,9 @@ def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)
         gt_scene_path = os.path.join(gt_images_dir, gt_folder_name)
         gen_scene_path = os.path.join(generated_images_dir, gen_folder_name)
 
-        # Get list of images in the scene folder
         gt_images = sorted(os.listdir(gt_scene_path))
         gen_images = sorted(os.listdir(gen_scene_path))
 
-        # Assuming image filenames match
         image_filenames = sorted(set(gt_images) & set(gen_images))
 
         if not image_filenames:
@@ -53,13 +48,9 @@ def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)
         for image_name in image_filenames:
             gt_image_path = os.path.join(gt_scene_path, image_name)
             gen_image_path = os.path.join(gen_scene_path, image_name)
-
-            # Run metrics
             results = run_all_metrics(gt_image_path, gen_image_path)
             scene_metrics.append(results)
             all_metrics.append(results)
-
-        # Compute median metrics for this scene
         metrics_keys = scene_metrics[0].keys()
         median_metrics = {}
         for key in metrics_keys:
@@ -70,8 +61,6 @@ def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)
     if not all_metrics:
         print("No metrics computed. Please check your data.")
         return
-
-    # Now compute overall statistics
     metrics_keys = all_metrics[0].keys()
     all_metrics_array = {key: np.array([m[key] for m in all_metrics]) for key in metrics_keys}
 
@@ -82,8 +71,6 @@ def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)
             'median': float(np.median(all_metrics_array[key])),
             'std': float(np.std(all_metrics_array[key]))
         }
-
-    # Save results to a JSON file
     results = {
         'per_scene_metrics': per_scene_metrics,
         'overall_stats': overall_stats
@@ -93,11 +80,7 @@ def process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)
         json.dump(results, f, indent=4)
 
     print(f"Metrics saved to {output_metrics_file}")
-
-    # Plotting metrics per scene
     plot_metrics_per_scene(per_scene_metrics, metrics_keys)
-
-    # Print overall statistics
     print("\nFinal Overall Statistics:")
     for key in metrics_keys:
         print(f"{key}: Mean = {overall_stats[key]['mean']:.4f}, Median = {overall_stats[key]['median']:.4f}, Std = {overall_stats[key]['std']:.4f}")
@@ -106,13 +89,12 @@ def plot_metrics_per_scene(per_scene_metrics, metrics_keys):
     """Plot each metric per scene using line graphs."""
     scenes = sorted(per_scene_metrics.keys())
     num_scenes = len(scenes)
-    scene_indices = list(range(1, num_scenes + 1))  # Scene numbers starting from 1
+    scene_indices = list(range(1, num_scenes + 1))
 
     for key in metrics_keys:
         values = [per_scene_metrics[scene][key] for scene in scenes]
         plt.figure(figsize=(10, 6))
         plt.plot(scene_indices, values, marker='o', linestyle='-')
-        # Adjust x-ticks for readability
         if num_scenes > 20:
             tick_step = max(num_scenes // 10, 1)
             tick_positions = scene_indices[::tick_step]
@@ -129,8 +111,8 @@ def plot_metrics_per_scene(per_scene_metrics, metrics_keys):
         print(f'Plot saved: {key}_per_scene.png')
 
 if __name__ == "__main__":
-    gt_images_dir = '/home/mseleem/3d_SceneScript/scene_0'        # Ground truth images directory
-    generated_images_dir = '/home/mseleem/3d_SceneScript/scene_images_gen_0'  # Generated images directory
-    output_metrics_file = '/home/mseleem/3d_SceneScript/metrics_results_0.json'
+    gt_images_dir = '../scene_images_gt'
+    generated_images_dir = '../scene_images_generated'
+    output_metrics_file = '../metrics_results.json'
 
     process_all_scenes(gt_images_dir, generated_images_dir, output_metrics_file)

@@ -1,7 +1,6 @@
 import json
 import numpy as np
 import plotly.graph_objects as go
-import os
 
 UNIT_CUBE_VERTICES = (
     np.array([
